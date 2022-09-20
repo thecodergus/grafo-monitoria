@@ -19,12 +19,25 @@ class Grafo:
     def rmAresta(self, vertice, vizinho):
         pass
 
-    def bfs(self, s):
-        visitados, fila, resultado = [], [], []
-        fila.append(s)
-        visitados.append(s)
+    def isCicle(self, s) -> bool:
+        visitados, restantes = [], [s]
 
-        while len(fila) > 0:
+        while restantes:
+            vertice = restantes.pop()
+            visitados.append(vertice)
+
+            for vizinho in self.grafo[vertice]:
+                if vizinho in visitados:
+                    return True
+                else:
+                    restantes.append(vizinho)
+
+        return False
+
+    def bfs(self, s):
+        visitados, fila, resultado = [s], [s], []
+
+        while fila:
             s = fila.pop(0)
             for vertice in self.grafo[s]:
                 if vertice not in visitados:
@@ -33,6 +46,17 @@ class Grafo:
             resultado.append(s)
 
         return resultado
+
+    def dfs(self, s):
+        pilha, caminho = [s], []
+        while pilha:
+            vertice = pilha.pop()
+            if vertice not in caminho:
+                caminho.append(vertice)
+                pilha.extend(self.grafo[vertice])
+        
+        return caminho
+
         
 
 if __name__ == "__main__":
