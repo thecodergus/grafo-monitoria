@@ -16,6 +16,9 @@ class Grafo:
     def rmAresta(self, vertice, vizinho):
         pass
 
+    def getGrau(self, s) -> int:
+        return len(self.grafo[s])
+
     def getAllVertices(self):
         return self.grafo.keys()
 
