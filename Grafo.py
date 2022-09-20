@@ -1,5 +1,8 @@
 
 
+import re
+
+
 class Grafo:
     grafo = {}
 
@@ -15,6 +18,22 @@ class Grafo:
 
     def rmAresta(self, vertice, vizinho):
         pass
+
+    def bfs(self, s):
+        visitados, fila, resultado = [], [], []
+        fila.append(s)
+        visitados.append(s)
+
+        while len(fila) > 0:
+            s = fila.pop(0)
+            for vertice in self.grafo[s]:
+                if vertice not in visitados:
+                    visitados.append(vertice)
+                    fila.append(vertice)
+            resultado.append(s)
+
+        return resultado
+        
 
 if __name__ == "__main__":
     pass
