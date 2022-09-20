@@ -1,19 +1,16 @@
 
 
-import re
-
+from collections import defaultdict
 
 class Grafo:
-    grafo = {}
+    grafo = defaultdict(list)
 
     def __init__(self, arquivo = "", dirigido = False):
         self.dirigido = dirigido
         self.enderecoArquivo = arquivo
 
     def addAresta(self, vertice, vizinho):
-        if vertice not in self.grafo:
-            self.grafo[vertice] = [vizinho]
-        elif vizinho not in self.grafo[vertice]:
+        if vizinho not in self.grafo[vertice]:
             self.grafo[vertice].append(vizinho)
 
     def rmAresta(self, vertice, vizinho):
@@ -45,10 +42,26 @@ class Grafo:
         
         return caminho
 
-    def temCiclo(self) -> bool:
-        vertices = self.getAllVertices()
+    def __temCiclo(self, s, visitado, parente) -> bool:
+        visitado[s] = True
 
-        
+        for i in self.grafo[s]:
+            if not visitado[i]:
+                if self.__temCiclo(i, visitado, s):
+                    return True
+            elif parente != i:
+                return True
+
+        return False
+
+    def temCiclo(self) -> bool:
+        numVertices = len(self.getAllVertices())
+        visitado = [False] * (numVertices)
+
+        for i in range(numVertices):
+            if not visitado[i]:
+                if self.__temCiclo(i, visitado, -1):
+                    return True
 
         return False
 
