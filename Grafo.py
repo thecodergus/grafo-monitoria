@@ -19,20 +19,8 @@ class Grafo:
     def rmAresta(self, vertice, vizinho):
         pass
 
-    def isCicle(self, s) -> bool:
-        visitados, restantes = [], [s]
-
-        while restantes:
-            vertice = restantes.pop()
-            visitados.append(vertice)
-
-            for vizinho in self.grafo[vertice]:
-                if vizinho in visitados:
-                    return True
-                else:
-                    restantes.append(vizinho)
-
-        return False
+    def getAllVertices(self):
+        return self.grafo.keys()
 
     def bfs(self, s):
         visitados, fila, resultado = [s], [s], []
@@ -56,6 +44,13 @@ class Grafo:
                 pilha.extend(self.grafo[vertice])
         
         return caminho
+
+    def temCiclo(self) -> bool:
+        vertices = self.getAllVertices()
+
+        
+
+        return False
 
         
 
