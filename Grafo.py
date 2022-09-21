@@ -8,13 +8,16 @@ class Grafo:
         self.enderecoArquivo = arquivo
 
     def addAresta(self, vertice, vizinho):
-        if vizinho not in self.grafo[vertice]:
+        if vertice in self.grafo and vizinho not in self.grafo[vertice]:
             self.grafo[vertice].append(vizinho)
             if not self.dirigido:
                 self.grafo[vizinho].append(vertice)
 
     def rmAresta(self, vertice, vizinho):
-        pass
+        if vertice in self.grafo:
+            self.grafo[vertice].remove(vizinho)
+            if not self.dirigido:
+                self.grafo[vizinho].remove(vertice)
 
     def getNumVertices(self) -> int:
         return len(self.grafo.keys())
