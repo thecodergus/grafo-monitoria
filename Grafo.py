@@ -71,6 +71,19 @@ class Grafo:
 
         return False
 
+    def showVertices(self):
+        vertices = self.getAllVertices()
+
+        for s in vertices:
+            print(f"${s}")
+
+    def showArestas(self):
+        vertices = self.getAllVertices()
+
+        for s1 in vertices:
+            for s2 in self.grafo[s]:
+                print(f"(${s1}, ${s2})")
+
         
 
 if __name__ == "__main__":
