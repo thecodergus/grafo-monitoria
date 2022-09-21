@@ -68,7 +68,7 @@ class Grafo:
 
     def temCiclo(self) -> bool:
         numVertices: int = self.getNumVertices()
-        visitado: list = [False] * (numVertices)
+        visitado: list = [False] * (numVertices + 1)
 
         for i in range(numVertices):
             if not visitado[i]:
@@ -94,5 +94,5 @@ class Grafo:
 
 if __name__ == "__main__":
     g = Grafo()
-    g.addAresta(1, 2).addAresta(2, 3).addAresta(2, 4)
-    g.showArestas()
+    g.addAresta(1, 2).addAresta(2, 3).addAresta(2, 4).addAresta(4, 1)
+    print(g.temCiclo())
