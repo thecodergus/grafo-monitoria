@@ -1,5 +1,3 @@
-
-
 from collections import defaultdict
 
 class Grafo:
@@ -12,9 +10,14 @@ class Grafo:
     def addAresta(self, vertice, vizinho):
         if vizinho not in self.grafo[vertice]:
             self.grafo[vertice].append(vizinho)
+            if not self.dirigido:
+                self.grafo[vizinho].append(vertice)
 
     def rmAresta(self, vertice, vizinho):
         pass
+
+    def getNumVertices(self) -> int:
+        return len(self.grafo.keys())
 
     def getGrau(self, s) -> int:
         return len(self.grafo[s])
@@ -58,8 +61,8 @@ class Grafo:
         return False
 
     def temCiclo(self) -> bool:
-        numVertices = len(self.getAllVertices())
-        visitado = [False] * (numVertices)
+        numVertices: int = self.getNumVertices()
+        visitado: list = [False] * (numVertices)
 
         for i in range(numVertices):
             if not visitado[i]:
