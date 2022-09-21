@@ -3,9 +3,8 @@ from collections import defaultdict
 class Grafo:
     grafo = defaultdict(list)
 
-    def __init__(self, arquivo = "", dirigido = False):
+    def __init__(self, dirigido = False):
         self.dirigido = dirigido
-        self.enderecoArquivo = arquivo
 
     def addAresta(self, vertice, vizinho):
         if vizinho not in self.grafo[vertice]:
