@@ -1,7 +1,9 @@
 from collections import defaultdict
-from turtle import title
+from turtle import color, width
 from pyvis import network as net
 from IPython.display import display, HTML
+import plotly.graph_objects as go
+import random
 
 class Grafo:
     grafo = defaultdict(list)
@@ -115,10 +117,11 @@ class Grafo:
     def showMapa2D(self) -> None:
         Vertices, Arestas = self.getVertices(), self.getArestas()
 
+        # congig
         interface = net.Network(
-                height='90%', 
-                width='60%',
-                notebook=True, 
+                height='100%', 
+                width='100%',
+                notebook=False, 
                 heading='Grafo 2D'
             )
         
@@ -129,13 +132,101 @@ class Grafo:
         # Add Arestas
         interface.add_edges(Arestas)
 
+        # export interface
         interface.show_buttons(filter_=['physics'])
         interface.show('Grafo2D.html')
         display(HTML('Grafo2D.html'))
 
 
     def showMapa3D(self):
-        pass
+        numVertices, Arestas = self.getNumVertices(), self.getArestas()
+
+        # Gerar posições aleatorias para os nodos num plano 3D
+        locs = []
+        for i in range(numVertices + 1):
+            locs.append([
+                random.random(),
+                random.random(),
+                random.random()
+            ])
+
+        # Configs
+        x_vertices = [locs[i][0] for i in range(numVertices)]
+        y_vertices = [locs[i][1] for i in range(numVertices)]
+        z_vertices = [locs[i][2] for i in range(numVertices)]
+
+        x_arestas, y_arestas, z_arestas = [], [], []
+
+        for aresta in Arestas:
+            x_arestas.append([
+                locs[aresta[0]][0], locs[aresta[1]][0], None
+            ])
+            
+            y_arestas.append([
+                locs[aresta[0]][1], locs[aresta[1]][1], None
+            ])
+
+            z_arestas.append([
+                locs[aresta[0]][2], locs[aresta[1]][2], None
+            ])
+
+        trace_arestas = go.Scatter3d(
+            x = x_arestas,
+            y = y_arestas,
+            z = z_arestas,
+            mode = "lines",
+            line = dict(
+                color = "black",
+                width = 2
+            ),
+            hoverinfo="none"
+        )
+
+        trace_vertices = go.Scatter3d(
+            x = x_vertices,
+            y = y_vertices,
+            z = z_vertices,
+            mode = "markers",
+            marker = dict(
+                symbol = "circle",
+                size = 10,
+                color = "blue",
+                line = dict(
+                    color = "black",
+                    width = 0.5
+                )
+            ),
+            hoverinfo = "text"
+        )
+
+        axis = dict(
+            showbackground=False,
+            showline=False,
+            zeroline=False,
+            showgrid=False,
+            showticklabels=False,
+            title=''
+        )
+
+        layout = go.Layout(
+            title = "Grafo 3D",
+            width=650,
+            height=625,
+            showlegend=False,
+            scene=dict(xaxis=dict(axis),
+                    yaxis=dict(axis),
+                    zaxis=dict(axis),
+                    ),
+            margin=dict(t=100),
+            hovermode='closest'
+        )
+
+        data = [trace_arestas, trace_vertices]
+
+        # Gerar figura 3D
+        fig = go.Figure(data=data, layout=layout)
+        fig.show()
+
 
 
 
@@ -157,5 +248,5 @@ def GrafoFromFile(enderecoArquivo = "", dirigido = False) -> Grafo:
 if __name__ == "__main__":
     g = GrafoFromFile("teste.txt")
     
-    g.showMapa2D()
-    # g.showMapa3D()
+    # g.showMapa2D()
+    g.showMapa3D()
