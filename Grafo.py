@@ -3,7 +3,7 @@ from collections import defaultdict
 class Grafo:
     grafo = defaultdict(list)
 
-    def __init__(self, dirigido = False) -> object:
+    def __init__(self, dirigido = False) -> None:
         self.dirigido = dirigido
 
     def addAresta(self, vertice, vizinho) -> object:
@@ -79,17 +79,24 @@ class Grafo:
 
     def showVertices(self) -> object:
         vertices = self.getAllVertices()
-
-        for s in vertices:
-            print(f'{s}')
+        
+        print("Vertices:")
+        for i, s in enumerate(vertices):
+            print(f'{s}', end = "")
+            if i % 10 == 0:
+                print()
 
         return self
 
     def showArestas(self) -> object:
         vertices = self.getAllVertices()
+        i = 0
         for s1 in vertices:
             for s2 in self.grafo[s1]:
-                print(f'({s1}, {s2})')
+                print(f'({s1}, {s2})', end = ", ")
+                i += 1
+                if i % 10 == 0:
+                    print()
 
         return self
 
