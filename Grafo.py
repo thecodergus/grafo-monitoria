@@ -237,11 +237,3 @@ def GrafoFromFile(enderecoArquivo = "", dirigido = False) -> Grafo:
                 grafo.addAresta(a, b)
 
     return grafo
-            
-        
-
-if __name__ == "__main__":
-    g = GrafoFromFile("teste.txt")
-    
-    # g.showMapa2D()
-    g.showMapa3D()
