@@ -1,4 +1,5 @@
 from collections import defaultdict
+import string
 
 class Grafo:
     grafo = defaultdict(list)
@@ -83,6 +84,8 @@ class Grafo:
         for s in vertices:
             print(f'{s}')
 
+        return self
+
     def showArestas(self):
         vertices = self.getAllVertices()
         print(vertices)
@@ -90,9 +93,24 @@ class Grafo:
             for s2 in self.grafo[s1]:
                 print(f'({s1}, {s2})')
 
+        return self
+
+def GrafoFromFile(enderecoArquivo = "", dirigido = False):
+    grafo = Grafo(dirigido)
+    split = lambda string: [*map(int, string.split(" "))]
+
+    with open(enderecoArquivo, "r") as  arquivo:
+        for linha in arquivo.readlines():
+            aresta = split(linha)
+            if len(aresta) > 1:
+                a, b = aresta
+                grafo.addAresta(a, b)
+
+    return grafo
+            
         
 
 if __name__ == "__main__":
-    g = Grafo()
-    g.addAresta(1, 2).addAresta(2, 3).addAresta(2, 4).addAresta(4, 1)
-    print(g.temCiclo())
+    g = GrafoFromFile("teste.txt")
+    
+    g.showArestas()
