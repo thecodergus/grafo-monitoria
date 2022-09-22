@@ -99,7 +99,7 @@ def GrafoFromFile(enderecoArquivo = "", dirigido = False):
     grafo = Grafo(dirigido)
     split = lambda string: [*map(int, string.split(" "))]
 
-    with open(enderecoArquivo, "r") as  arquivo:
+    with open(enderecoArquivo, "r") as arquivo:
         for linha in arquivo.readlines():
             aresta = split(linha)
             if len(aresta) > 1:
