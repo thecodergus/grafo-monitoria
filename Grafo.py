@@ -132,49 +132,46 @@ class Grafo:
             interface.add_node(v, label=str(v))
 
         # Add Arestas
-        interface.add_edges(Arestas)
+        interface.add_arestas(Arestas)
 
         # export interfaces
         interface.show('Grafo2D.html')
         display(HTML('Grafo2D.html'))
 
 
-    def showMapa3D(self):
+    def showMapa3D(self) -> None:
         numVertices = self.getNumVertices()
         edge_weights = [1] * (numVertices)
-        edges = self.getArestas(tupla=True)
+        arestas = self.getArestas(tupla=True)
 
-        spring_3D = defaultdict(list)
+        grafo_3D = defaultdict(list)
 
+        # random.SystemRandom torna o aleatorio em aleatorio imprevisivel
         random.SystemRandom()
-        for i in range(1, numVertices + 1):
-            # random.seed(i)
-            spring_3D[i].extend([
-                random.random(),
-                random.random(),
-                random.random()
-            ])
+        grafo_3D = {
+            v: [random.random(), random.random(), random.random()] for v in self.getVertices()
+        }
 
-        x_nodes = [spring_3D[key][0] for key in spring_3D.keys()]
-        y_nodes = [spring_3D[key][1] for key in spring_3D.keys()]
-        z_nodes = [spring_3D[key][2] for key in spring_3D.keys()]
+        x_vertices = [grafo_3D[key][0] for key in grafo_3D.keys()]
+        y_vertices = [grafo_3D[key][1] for key in grafo_3D.keys()]
+        z_vertices = [grafo_3D[key][2] for key in grafo_3D.keys()]
 
-        x_edges, y_edges, z_edges = [], [], []
+        x_arestas, y_arestas, z_arestas = [], [], []
         xtp, ytp, ztp = [], [], []
 
-        for edge in edges:
+        for aresta in arestas:
             #formato: [comeco, destino, None]
-            x_coords = [spring_3D[edge[0]][0], spring_3D[edge[1]][0], None]
-            x_edges += x_coords
-            xtp.append(0.5 * (spring_3D[edge[0]][0] + spring_3D[edge[1]][0]))
+            x_coords = [grafo_3D[aresta[0]][0], grafo_3D[aresta[1]][0], None]
+            x_arestas.extend(x_coords)
+            xtp.append(0.5 * (grafo_3D[aresta[0]][0] + grafo_3D[aresta[1]][0]))
 
-            y_coords = [spring_3D[edge[0]][1], spring_3D[edge[1]][1], None]
-            y_edges += y_coords
-            ytp.append(0.5 * (spring_3D[edge[0]][1] + spring_3D[edge[1]][1]))
+            y_coords = [grafo_3D[aresta[0]][1], grafo_3D[aresta[1]][1], None]
+            y_arestas.extend(y_coords)
+            ytp.append(0.5 * (grafo_3D[aresta[0]][1] + grafo_3D[aresta[1]][1]))
 
-            z_coords = [spring_3D[edge[0]][2], spring_3D[edge[1]][2], None]
-            z_edges += z_coords
-            ztp.append(0.5 * (spring_3D[edge[0]][2] + spring_3D[edge[1]][2]))
+            z_coords = [grafo_3D[aresta[0]][2], grafo_3D[aresta[1]][2], None]
+            z_arestas.extend(z_coords)
+            ztp.append(0.5 * (grafo_3D[aresta[0]][2] + grafo_3D[aresta[1]][2]))
 
 
         etext = [f'weight={w}' for w in edge_weights]
@@ -184,36 +181,44 @@ class Grafo:
                 y=ytp,
                 z=ztp,
                 mode='markers',
-                # set the same color as for the edge lines
+                # Cor das linhas
                 marker=dict(color='rgb(125,125,125)', size=1),
                 text=etext, 
                 hoverinfo='text'
             )
 
-        #create a trace for the edges
-        trace_edges = go.Scatter3d(
-                x=x_edges,
-                y=y_edges,
-                z=z_edges,
+        # Criar Linhas
+        trace_arestas = go.Scatter3d(
+                x=x_arestas,
+                y=y_arestas,
+                z=z_arestas,
                 mode='lines',
                 line=dict(color='black', width=2),
                 hoverinfo='none'
             )
 
-        #create a trace for the nodes
-        trace_nodes = go.Scatter3d(
-            x=x_nodes,
-            y=y_nodes,
-            z=z_nodes,
+        # Criar Vertices
+        trace_vertices = go.Scatter3d(
+            x=x_vertices,
+            y=y_vertices,
+            z=z_vertices,
             mode='markers',
             marker=dict(symbol='circle',
                         size=10,
                         color='skyblue')
         )
 
-        #Include the traces we want to plot and create a figure
-        data = [trace_edges, trace_nodes, trace_weights]
-        fig = go.Figure(data=data)
+        layout = go.Layout(
+                title = "Grafo 3D",
+                autosize=True,
+                showlegend=True,
+                margin=dict(t=100),
+                hovermode='closest'
+            )
+
+        # Juntar todas as infos
+        data = [trace_arestas, trace_vertices, trace_weights]
+        fig = go.Figure(data=data, layout=layout)
 
         fig.show()
 
