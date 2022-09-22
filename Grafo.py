@@ -1,13 +1,12 @@
 from collections import defaultdict
-import string
 
 class Grafo:
     grafo = defaultdict(list)
 
-    def __init__(self, dirigido = False):
+    def __init__(self, dirigido = False) -> object:
         self.dirigido = dirigido
 
-    def addAresta(self, vertice, vizinho):
+    def addAresta(self, vertice, vizinho) -> object:
         if vizinho not in self.grafo[vertice]:
             self.grafo[vertice].append(vizinho)
             if not self.dirigido:
@@ -15,7 +14,7 @@ class Grafo:
 
         return self
 
-    def rmAresta(self, vertice, vizinho):
+    def rmAresta(self, vertice, vizinho) -> object:
         if vertice in self.grafo:
             self.grafo[vertice].remove(vizinho)
             if not self.dirigido:
@@ -29,10 +28,10 @@ class Grafo:
     def getGrau(self, s) -> int:
         return len(self.grafo[s])
 
-    def getAllVertices(self):
+    def getAllVertices(self) -> list:
         return self.grafo.keys()
 
-    def bfs(self, s):
+    def bfs(self, s) -> list:
         visitados, fila, resultado = [s], [s], []
 
         while fila:
@@ -45,7 +44,7 @@ class Grafo:
 
         return resultado
 
-    def dfs(self, s):
+    def dfs(self, s) -> list:
         pilha, caminho = [s], []
         while pilha:
             vertice = pilha.pop()
@@ -78,7 +77,7 @@ class Grafo:
 
         return False
 
-    def showVertices(self):
+    def showVertices(self) -> object:
         vertices = self.getAllVertices()
 
         for s in vertices:
@@ -86,16 +85,15 @@ class Grafo:
 
         return self
 
-    def showArestas(self):
+    def showArestas(self) -> object:
         vertices = self.getAllVertices()
-        print(vertices)
         for s1 in vertices:
             for s2 in self.grafo[s1]:
                 print(f'({s1}, {s2})')
 
         return self
 
-def GrafoFromFile(enderecoArquivo = "", dirigido = False):
+def GrafoFromFile(enderecoArquivo = "", dirigido = False) -> Grafo:
     grafo = Grafo(dirigido)
     split = lambda string: [*map(int, string.split(" "))]
 
