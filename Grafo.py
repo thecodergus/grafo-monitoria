@@ -138,12 +138,16 @@ class Grafo:
         display(HTML('Grafo2D.html'))
 
 
+
+    # https://deepnote.com/@deepnote/3D-network-visualisations-using-plotly-a18c5e37-a517-4b27-bfde-1fee94a5760f
+    # https://plotly.com/python/v3/3d-network-graph/
     def showMapa3D(self):
         numVertices, Arestas = self.getNumVertices(), self.getArestas()
 
         # Gerar posições aleatorias para os nodos num plano 3D
         locs = []
         for i in range(numVertices + 1):
+            random.seed(i)
             locs.append([
                 random.random(),
                 random.random(),
@@ -176,8 +180,8 @@ class Grafo:
             z = z_arestas,
             mode = "lines",
             line = dict(
-                color = "black",
-                width = 2
+                color = "rgb(125,125,125)",
+                width = 1
             ),
             hoverinfo="none"
         )
@@ -196,12 +200,13 @@ class Grafo:
                     width = 0.5
                 )
             ),
+            text = [*map(str, self.getVertices())],
             hoverinfo = "text"
         )
 
         axis = dict(
             showbackground=False,
-            showline=False,
+            showline=True,
             zeroline=False,
             showgrid=False,
             showticklabels=False,
@@ -220,7 +225,7 @@ class Grafo:
             hovermode='closest'
         )
 
-        data = [trace_arestas, trace_vertices]
+        data = [trace_vertices, trace_arestas]
 
         # Gerar figura 3D
         fig = go.Figure(
