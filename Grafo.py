@@ -115,7 +115,12 @@ class Grafo:
     def showMapa2D(self) -> None:
         Vertices, Arestas = self.getVertices(), self.getArestas()
 
-        interface = net.Network(height='90%', width='60%',notebook=True, heading='Grafo 2D')
+        interface = net.Network(
+                height='90%', 
+                width='60%',
+                notebook=True, 
+                heading='Grafo 2D'
+            )
         
         # Add Vertices
         for v in Vertices:
