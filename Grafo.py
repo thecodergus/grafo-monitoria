@@ -210,8 +210,7 @@ class Grafo:
 
         layout = go.Layout(
             title = "Grafo 3D",
-            width=650,
-            height=625,
+            autosize=True,
             showlegend=False,
             scene=dict(xaxis=dict(axis),
                     yaxis=dict(axis),
@@ -224,7 +223,10 @@ class Grafo:
         data = [trace_arestas, trace_vertices]
 
         # Gerar figura 3D
-        fig = go.Figure(data=data, layout=layout)
+        fig = go.Figure(
+            data=data, 
+            layout=layout
+            )
         fig.show()
 
 
