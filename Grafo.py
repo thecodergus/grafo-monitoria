@@ -1,5 +1,4 @@
 from collections import defaultdict
-from turtle import color, width
 from pyvis import network as net
 from IPython.display import display, HTML
 import plotly.graph_objects as go
