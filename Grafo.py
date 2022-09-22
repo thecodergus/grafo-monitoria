@@ -1,4 +1,7 @@
 from collections import defaultdict
+from turtle import title
+from pyvis import network as net
+from IPython.display import display, HTML
 
 class Grafo:
     grafo = defaultdict(list)
@@ -28,7 +31,7 @@ class Grafo:
     def getGrau(self, s) -> int:
         return len(self.grafo[s])
 
-    def getAllVertices(self) -> list:
+    def getVertices(self) -> list:
         return self.grafo.keys()
 
     def bfs(self, s) -> list:
@@ -78,7 +81,7 @@ class Grafo:
         return False
 
     def showVertices(self) -> object:
-        vertices = self.getAllVertices()
+        vertices = self.getVertices()
         
         print("Vertices:")
         for i, s in enumerate(vertices):
@@ -89,7 +92,7 @@ class Grafo:
         return self
 
     def showArestas(self) -> object:
-        vertices = self.getAllVertices()
+        vertices = self.getVertices()
         i = 0
         for s1 in vertices:
             for s2 in self.grafo[s1]:
@@ -99,6 +102,37 @@ class Grafo:
                     print()
 
         return self
+
+    def getArestas(self) -> list:
+        resultado, vertices = [], self.getVertices()
+
+        for s1 in vertices:
+            for s2 in self.grafo[s1]:
+                resultado.append([s1, s2])
+
+        return resultado
+
+    def showMapa2D(self) -> None:
+        Vertices, Arestas = self.getVertices(), self.getArestas()
+
+        interface = net.Network(height='90%', width='60%',notebook=True, heading='Grafo 2D')
+        
+        # Add Vertices
+        for v in Vertices:
+            interface.add_node(v, label=str(v))
+
+        # Add Arestas
+        interface.add_edges(Arestas)
+
+        interface.show_buttons(filter_=['physics'])
+        interface.show('Grafo2D.html')
+        display(HTML('Grafo2D.html'))
+
+
+    def showMapa3D(self):
+        pass
+
+
 
 def GrafoFromFile(enderecoArquivo = "", dirigido = False) -> Grafo:
     grafo = Grafo(dirigido)
@@ -118,4 +152,5 @@ def GrafoFromFile(enderecoArquivo = "", dirigido = False) -> Grafo:
 if __name__ == "__main__":
     g = GrafoFromFile("teste.txt")
     
-    g.showArestas()
+    g.showMapa2D()
+    # g.showMapa3D()
