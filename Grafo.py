@@ -141,7 +141,7 @@ class Grafo:
 
     def showMapa3D(self) -> None:
         numVertices = self.getNumVertices()
-        edge_weights = [1] * (numVertices)
+        arestas_weights = [1] * (numVertices)
         arestas = self.getArestas(tupla=True)
 
         grafo_3D = defaultdict(list)
@@ -174,7 +174,7 @@ class Grafo:
             ztp.append(0.5 * (grafo_3D[aresta[0]][2] + grafo_3D[aresta[1]][2]))
 
 
-        etext = [f'weight={w}' for w in edge_weights]
+        etext = [f'weight={w}' for w in arestas_weights]
 
         trace_weights = go.Scatter3d(
                 x=xtp,
