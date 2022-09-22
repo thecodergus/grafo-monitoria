@@ -2,6 +2,7 @@ from collections import defaultdict
 from pyvis import network as net
 from IPython.display import display, HTML
 import plotly.graph_objects as go
+import networkx as nx
 import random
 
 class Grafo:
@@ -140,18 +141,21 @@ class Grafo:
 
     # https://deepnote.com/@deepnote/3D-network-visualisations-using-plotly-a18c5e37-a517-4b27-bfde-1fee94a5760f
     # https://plotly.com/python/v3/3d-network-graph/
+    # https://stackoverflow.com/questions/65752590/converting-a-networkx-2d-graph-into-a-3d-interactive-graph
     def showMapa3D(self):
         numVertices, Arestas = self.getNumVertices(), self.getArestas()
 
         # Gerar posições aleatorias para os nodos num plano 3D
-        locs = []
-        for i in range(numVertices + 1):
-            random.seed(i)
-            locs.append([
-                random.random(),
-                random.random(),
-                random.random()
-            ])
+        # locs = []
+        # for i in range(numVertices + 1):
+        #     random.seed(i)
+        #     locs.append([
+        #         random.random(),
+        #         random.random(),
+        #         random.random()
+        #     ])
+
+        locs = nx.spring_layout(Arestas, dim = 3, k = 0.5)
 
         # Configs
         x_vertices = [locs[i][0] for i in range(numVertices)]
