@@ -225,9 +225,9 @@ class Grafo:
 
 
 
-def GrafoFromFile(enderecoArquivo = "", dirigido = False) -> Grafo:
+def GrafoFromFile(enderecoArquivo = "", separador = " ", dirigido = False) -> Grafo:
     grafo = Grafo(dirigido)
-    split = lambda string: [*map(int, string.split(" "))]
+    split = lambda string: [*map(int, string.split(separador))]
 
     with open(enderecoArquivo, "r") as arquivo:
         for linha in arquivo.readlines():
