@@ -132,7 +132,7 @@ class Grafo:
             interface.add_node(v, label=str(v))
 
         # Add Arestas
-        interface.add_arestas(Arestas)
+        interface.add_edges(Arestas)
 
         # export interfaces
         interface.show('Grafo2D.html')
