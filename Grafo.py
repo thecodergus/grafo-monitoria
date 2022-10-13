@@ -3,6 +3,7 @@ from pyvis import network as net
 from IPython.display import display, HTML
 import plotly.graph_objects as go
 import random
+import minify_html
 
 class Grafo:
     grafo = defaultdict(list)
@@ -135,8 +136,15 @@ class Grafo:
         interface.add_edges(Arestas)
 
         # export interfaces
-        interface.show('Grafo2D.html')
-        display(HTML('Grafo2D.html'))
+        nome_arquivo_saida = 'Grafo2D.html'
+        interface.show(nome_arquivo_saida)
+        self.__minificarArquivoHTML(nome_arquivo_saida)
+        display(HTML(nome_arquivo_saida))
+
+    def __minificarArquivoHTML(self, nomeArquivo="Grafo2D.html"):
+        arquivoRead, arquivoWrite = open(nomeArquivo, "r").read(), open(nomeArquivo, "w+")
+        arquivoWrite.write(minify_html.minify(arquivoRead, minify_js=True, remove_processing_instructions=True, minify_css=True))
+        arquivoWrite.close()
 
 
     def showMapa3D(self) -> None:
