@@ -160,9 +160,9 @@ class Grafo:
             v: [random.random(), random.random(), random.random()] for v in self.getVertices()
         }
 
-        x_vertices = [grafo_3D[key][0] for key in grafo_3D.keys()]
-        y_vertices = [grafo_3D[key][1] for key in grafo_3D.keys()]
-        z_vertices = [grafo_3D[key][2] for key in grafo_3D.keys()]
+        x_vertices = [*map(lambda key: grafo_3D[key][0], grafo_3D.keys())]
+        y_vertices = [*map(lambda key: grafo_3D[key][1], grafo_3D.keys())]
+        z_vertices = [*map(lambda key: grafo_3D[key][2], grafo_3D.keys())]
 
         x_arestas, y_arestas, z_arestas = [], [], []
         xtp, ytp, ztp = [], [], []
