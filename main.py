@@ -2,7 +2,7 @@ from Grafo import GrafoFromFile
 
 
 if __name__ == "__main__":
-    g = GrafoFromFile("ListaDeAdjacencias.txt", separador=",")
+    g = GrafoFromFile("teste.txt", separador=",")
     
     # Imprime os Grafos em 2D e 3D
     g.showMapa2D()
