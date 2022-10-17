@@ -1,5 +1,8 @@
 # Monitoria de Grafos - Exibição de Grafo em 2D e 3D
 
+### 🤯🤯🤯🤯🤯🤯🤯🤯🤯Exemplo de um grafo enorme: 🤯🤯🤯🤯🤯🤯🤯🤯🤯
+![grafo](https://miro.medium.com/max/1400/1*dCDgJXIStlhz9v8anDeiRw.png)
+
 ## Instalação
 
 1. Fazer download do repositorio com ```git clone https://github.com/thelostgus/express-typescript```no terminal ou baixar o repositorio manualmente.
