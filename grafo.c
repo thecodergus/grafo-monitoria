@@ -1116,6 +1116,153 @@ void free_graph(Graph *g)
     // Não é possível modificar o ponteiro do chamador (passagem por valor)
 }
 
+/**
+ * @brief Calcula o menor caminho entre dois vértices usando Dijkstra (pesos unitários).
+ *
+ * @param[in]  g         Ponteiro para o grafo (não pode ser NULL).
+ * @param[in]  source    Vértice de origem (0 <= source < g->num_vertices).
+ * @param[in]  target    Vértice de destino (0 <= target < g->num_vertices).
+ * @param[out] out_path  (Opcional) Se não NULL, recebe um array dinâmico com o caminho (source...target).
+ *                       O usuário é responsável por liberar o array retornado.
+ * @param[out] out_len   (Opcional) Se não NULL, recebe o número de vértices do caminho (incluindo source e target).
+ * @return Distância mínima entre source e target, ou INT_MAX se não há caminho.
+ *
+ * @note Para grafos ponderados, adapte a estrutura do grafo para armazenar pesos.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, DCL13-C, INT30-C
+ */
+int dijkstra_shortest_path(const Graph *g, size_t source, size_t target, int **out_path, size_t *out_len)
+{
+    if (!g || !g->adj || !g->adj_size)
+    {
+        fprintf(stderr, "[ERRO] dijkstra_shortest_path: Grafo ou membros internos são NULL.\n");
+        if (out_path)
+            *out_path = NULL;
+        if (out_len)
+            *out_len = 0;
+        return INT_MAX;
+    }
+    if (source >= g->num_vertices || target >= g->num_vertices)
+    {
+        fprintf(stderr, "[ERRO] dijkstra_shortest_path: Vértice fora do intervalo (source=%zu, target=%zu).\n", source, target);
+        if (out_path)
+            *out_path = NULL;
+        if (out_len)
+            *out_len = 0;
+        return INT_MAX;
+    }
+    if (g->num_vertices == 0 || g->num_vertices > SIZE_MAX / sizeof(int))
+    {
+        fprintf(stderr, "[ERRO] dijkstra_shortest_path: Número de vértices inválido ou overflow.\n");
+        if (out_path)
+            *out_path = NULL;
+        if (out_len)
+            *out_len = 0;
+        return INT_MAX;
+    }
+
+    size_t n = g->num_vertices;
+    int *dist = (int *)safe_malloc(n * sizeof(int));
+    bool *visited = (bool *)safe_calloc(n, sizeof(bool));
+    size_t *prev = (size_t *)safe_malloc(n * sizeof(size_t)); // Para reconstruir o caminho
+    if (!dist || !visited || !prev)
+    {
+        fprintf(stderr, "[ERRO] dijkstra_shortest_path: Falha ao alocar memória.\n");
+        free(dist);
+        free(visited);
+        free(prev);
+        if (out_path)
+            *out_path = NULL;
+        if (out_len)
+            *out_len = 0;
+        return INT_MAX;
+    }
+
+    for (size_t i = 0; i < n; i++)
+    {
+        dist[i] = INT_MAX;
+        prev[i] = SIZE_MAX; // Sentinela para "sem predecessor"
+    }
+    dist[source] = 0;
+
+    for (size_t count = 0; count < n; count++)
+    {
+        // Encontra o vértice não visitado com menor distância
+        int min_dist = INT_MAX;
+        size_t u = n;
+        for (size_t v = 0; v < n; v++)
+        {
+            if (!visited[v] && dist[v] < min_dist)
+            {
+                min_dist = dist[v];
+                u = v;
+            }
+        }
+        if (u == n || dist[u] == INT_MAX)
+            break; // Todos os alcançáveis já visitados
+
+        visited[u] = true;
+        if (u == target)
+            break; // Chegou ao destino
+
+        for (size_t i = 0; i < g->adj_size[u]; i++)
+        {
+            size_t v = g->adj[u][i];
+            if (v >= n)
+                continue;
+            if (!visited[v] && dist[u] != INT_MAX && dist[u] + 1 < dist[v])
+            {
+                dist[v] = dist[u] + 1;
+                prev[v] = u;
+            }
+        }
+    }
+
+    // Reconstrói o caminho, se solicitado
+    if (out_path)
+    {
+        *out_path = NULL;
+        if (dist[target] != INT_MAX)
+        {
+            // Caminho existe: reconstrói do target até o source
+            size_t path_len = 1;
+            for (size_t v = target; v != source; v = prev[v])
+                path_len++;
+            int *path = (int *)safe_malloc(path_len * sizeof(int));
+            if (path)
+            {
+                size_t idx = path_len;
+                size_t v = target;
+                while (1)
+                {
+                    path[--idx] = (int)v;
+                    if (v == source)
+                        break;
+                    v = prev[v];
+                }
+                *out_path = path;
+                if (out_len)
+                    *out_len = path_len;
+            }
+            else
+            {
+                if (out_len)
+                    *out_len = 0;
+            }
+        }
+        else
+        {
+            if (out_len)
+                *out_len = 0;
+        }
+    }
+
+    int result = dist[target];
+    free(dist);
+    free(visited);
+    free(prev);
+    return result;
+}
+
 /******************** FUNÇÃO PRINCIPAL (EXEMPLO) ********************/
 
 /**
