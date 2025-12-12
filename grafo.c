@@ -358,28 +358,56 @@ size_t get_degree(const Graph *g, size_t vertex)
     return g->adj_size[vertex];
 }
 
-/*
- * Executa BFS a partir de um vértice start.
- * Retorna um array dinâmico com a ordem de visita.
- * O usuário é responsável por liberar a memória retornada.
+/**
+ * @brief Executa busca em largura (BFS) a partir de um vértice inicial.
+ * @param[in] g Ponteiro constante para o grafo.
+ * @param[in] start Vértice inicial (0 <= start < g->num_vertices).
+ * @param[out] visited_count (Opcional) Ponteiro para size_t que recebe o número de vértices visitados.
+ * @return Ponteiro para array dinâmico com a ordem de visita, ou NULL em caso de erro.
+ * @pre g != NULL, start < g->num_vertices
+ * @post O usuário é responsável por liberar a memória retornada.
+ * @note Em caso de erro, imprime mensagem em stderr e retorna NULL.
+ * @note CERT C: API00-C, ARR30-C, MEM35-C, MEM31-C, ERR33-C, DCL13-C
  */
-int *bfs(const Graph *g, int start)
+int *bfs(const Graph *g, size_t start /*, size_t *visited_count */)
 {
-    if ((size_t)start >= g->num_vertices)
+    if (g == NULL)
     {
-        fprintf(stderr, "Índice de vértice inválido em bfs.\n");
+        fprintf(stderr, "[ERRO] bfs: Grafo é NULL.\n");
+        return NULL;
+    }
+    if (start >= g->num_vertices)
+    {
+        fprintf(stderr, "[ERRO] bfs: Índice de vértice inicial inválido (%zu).\n", start);
+        return NULL;
+    }
+    if (g->num_vertices == 0 || g->num_vertices > SIZE_MAX / sizeof(int))
+    {
+        fprintf(stderr, "[ERRO] bfs: Número de vértices inválido ou overflow.\n");
         return NULL;
     }
 
     bool *visited = (bool *)safe_calloc(g->num_vertices, sizeof(bool));
+    if (!visited)
+        return NULL;
     int *result = (int *)safe_malloc(g->num_vertices * sizeof(int));
+    if (!result)
+    {
+        free(visited);
+        return NULL;
+    }
     int *queue = (int *)safe_malloc(g->num_vertices * sizeof(int));
+    if (!queue)
+    {
+        free(result);
+        free(visited);
+        return NULL;
+    }
 
-    size_t front = 0, rear = 0;
+    size_t front = 0, rear = 0, count = 0;
     visited[start] = true;
-    queue[rear++] = start;
+    queue[rear++] = (int)start;
 
-    size_t count = 0;
     while (front < rear)
     {
         int v = queue[front++];
@@ -387,7 +415,12 @@ int *bfs(const Graph *g, int start)
 
         for (size_t i = 0; i < g->adj_size[v]; i++)
         {
-            int neigh = g->adj[v][i];
+            int neigh = (int)g->adj[v][i];
+            if ((size_t)neigh >= g->num_vertices)
+            {
+                fprintf(stderr, "[AVISO] bfs: Vizinho inválido (%d) encontrado para vértice %d. Ignorando.\n", neigh, v);
+                continue;
+            }
             if (!visited[neigh])
             {
                 visited[neigh] = true;
@@ -399,45 +432,87 @@ int *bfs(const Graph *g, int start)
     free(queue);
     free(visited);
 
-    // count contém o número de vértices visitados
-    // Nesse caso assume-se que todos podem ser visitados a partir de start.
-    // Caso contrário, result conterá apenas os visitados.
-    // O cliente pode utilizar count para saber quantos foram visitados.
+    // (Opcional) Se desejar retornar o número de visitados:
+    // if (visited_count) *visited_count = count;
+
+    // (Opcional) Redimensionar result para count:
+    // int *resized = safe_realloc(result, count * sizeof(int));
+    // if (resized) result = resized;
+
     return result;
 }
 
-/*
- * Executa DFS iterativa a partir de start.
- * Retorna um array dinâmico com a ordem de visita.
- * O usuário libera a memória resultante.
+/**
+ * @brief Executa busca em profundidade (DFS) iterativa a partir de um vértice inicial.
+ * @param[in] g Ponteiro constante para o grafo.
+ * @param[in] start Vértice inicial (0 <= start < g->num_vertices).
+ * @param[out] visited_count (Opcional) Ponteiro para size_t que recebe o número de vértices visitados.
+ * @return Ponteiro para array dinâmico com a ordem de visita, ou NULL em caso de erro.
+ * @pre g != NULL, start < g->num_vertices
+ * @post O usuário é responsável por liberar a memória retornada.
+ * @note Em caso de erro, imprime mensagem em stderr e retorna NULL.
+ * @note CERT C: API00-C, ARR30-C, MEM35-C, MEM31-C, ERR33-C, DCL13-C
  */
-int *dfs(const Graph *g, int start)
+int *dfs(const Graph *g, size_t start /*, size_t *visited_count */)
 {
-    if ((size_t)start >= g->num_vertices)
+    if (g == NULL)
     {
-        fprintf(stderr, "Índice de vértice inválido em dfs.\n");
+        fprintf(stderr, "[ERRO] dfs: Grafo é NULL.\n");
+        return NULL;
+    }
+    if (start >= g->num_vertices)
+    {
+        fprintf(stderr, "[ERRO] dfs: Índice de vértice inicial inválido (%zu).\n", start);
+        return NULL;
+    }
+    if (g->num_vertices == 0 || g->num_vertices > SIZE_MAX / sizeof(int))
+    {
+        fprintf(stderr, "[ERRO] dfs: Número de vértices inválido ou overflow.\n");
         return NULL;
     }
 
     bool *visited = (bool *)safe_calloc(g->num_vertices, sizeof(bool));
+    if (!visited)
+        return NULL;
     int *stack = (int *)safe_malloc(g->num_vertices * sizeof(int));
+    if (!stack)
+    {
+        free(visited);
+        return NULL;
+    }
     int *path = (int *)safe_malloc(g->num_vertices * sizeof(int));
+    if (!path)
+    {
+        free(stack);
+        free(visited);
+        return NULL;
+    }
 
-    size_t top = -1; // Utilize ssize_t para permitir -1
-    stack[++top] = start;
-
+    size_t top = -1;
+    stack[++top] = (int)start;
     size_t count = 0;
+
     while (top >= 0)
     {
         int v = stack[top--];
+        if ((size_t)v >= g->num_vertices)
+        {
+            fprintf(stderr, "[AVISO] dfs: Vértice inválido (%d) desempilhado. Ignorando.\n", v);
+            continue;
+        }
         if (!visited[v])
         {
             visited[v] = true;
             path[count++] = v;
-            // Adiciona vizinhos na pilha (poderia inverter a ordem se desejado)
+            // Adiciona vizinhos na pilha (pode inverter a ordem se desejado)
             for (size_t i = 0; i < g->adj_size[v]; i++)
             {
-                int neigh = g->adj[v][i];
+                int neigh = (int)g->adj[v][i];
+                if ((size_t)neigh >= g->num_vertices)
+                {
+                    fprintf(stderr, "[AVISO] dfs: Vizinho inválido (%d) encontrado para vértice %d. Ignorando.\n", neigh, v);
+                    continue;
+                }
                 if (!visited[neigh])
                 {
                     stack[++top] = neigh;
@@ -448,6 +523,13 @@ int *dfs(const Graph *g, int start)
 
     free(stack);
     free(visited);
+
+    // (Opcional) Se desejar retornar o número de visitados:
+    // if (visited_count) *visited_count = count;
+
+    // (Opcional) Redimensionar path para count:
+    // int *resized = safe_realloc(path, count * sizeof(int));
+    // if (resized) path = resized;
 
     return path;
 }
