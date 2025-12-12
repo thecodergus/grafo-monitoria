@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stddef.h>
+#include <limits.h>
 
 #define GRAFO_MAX_VERTICES 10000
 
@@ -314,23 +316,44 @@ int remove_edge(Graph *g, size_t src, size_t dest)
     return 0;
 }
 
-/*
- * Retorna o número de vértices do grafo.
+/**
+ * @brief Retorna o número de vértices do grafo.
+ * @param g Ponteiro constante para o grafo.
+ * @return O número de vértices, ou 0 se g for NULL.
+ * @pre g != NULL
+ * @note Em caso de erro, imprime mensagem em stderr.
+ * @note CERT C: DCL13-C, API00-C
  */
 size_t get_num_vertices(const Graph *g)
 {
+    if (g == NULL)
+    {
+        fprintf(stderr, "[ERRO] get_num_vertices: Grafo é NULL.\n");
+        return 0;
+    }
     return g->num_vertices;
 }
 
-/*
- * Retorna o grau do vértice vertex.
+/**
+ * @brief Retorna o grau (número de arestas incidentes/saindo) de um vértice.
+ * @param g Ponteiro constante para o grafo.
+ * @param vertex Índice do vértice (0 <= vertex < g->num_vertices).
+ * @return O grau do vértice, ou SIZE_MAX em caso de erro (grafo NULL ou índice inválido).
+ * @pre g != NULL, vertex < g->num_vertices
+ * @note Em caso de erro, imprime mensagem em stderr.
+ * @note CERT C: DCL13-C, API00-C, ARR30-C
  */
-size_t get_degree(const Graph *g, int vertex)
+size_t get_degree(const Graph *g, size_t vertex)
 {
-    if ((size_t)vertex >= g->num_vertices)
+    if (g == NULL)
     {
-        fprintf(stderr, "Índice de vértice inválido em get_degree.\n");
-        return 0;
+        fprintf(stderr, "[ERRO] get_degree: Grafo é NULL.\n");
+        return SIZE_MAX;
+    }
+    if (vertex >= g->num_vertices)
+    {
+        fprintf(stderr, "[ERRO] get_degree: Índice de vértice inválido (%zu). Deve ser menor que %zu.\n", vertex, g->num_vertices);
+        return SIZE_MAX;
     }
     return g->adj_size[vertex];
 }
@@ -400,7 +423,7 @@ int *dfs(const Graph *g, int start)
     int *stack = (int *)safe_malloc(g->num_vertices * sizeof(int));
     int *path = (int *)safe_malloc(g->num_vertices * sizeof(int));
 
-    ssize_t top = -1; // Utilize ssize_t para permitir -1
+    size_t top = -1; // Utilize ssize_t para permitir -1
     stack[++top] = start;
 
     size_t count = 0;
