@@ -534,31 +534,87 @@ int *dfs(const Graph *g, size_t start /*, size_t *visited_count */)
     return path;
 }
 
-/*
- * Função auxiliar para detecção de ciclo em grafos não direcionados.
- * parent = -1 para o primeiro chamado.
+/**
+ * @brief Função auxiliar recursiva para detecção de ciclo em grafos não direcionados.
+ *        Utiliza DFS para verificar se um vizinho já visitado não é o pai do vértice atual.
+ *
+ * @param[in]  g      Ponteiro constante para o grafo. Não deve ser NULL.
+ * @param[in]  u      Vértice atual sendo visitado (0 <= u < g->num_vertices).
+ * @param[in,out] visited Array de booleanos para marcar vértices visitados.
+ *                        Deve ter g->num_vertices elementos válidos.
+ * @param[in]  parent Vértice que chamou 'u' na recursão (para evitar considerar
+ *                    aresta de volta como ciclo). Use (ssize_t)-1 para o vértice inicial.
+ *
+ * @return true se um ciclo for detectado, false caso contrário.
+ *
+ * @pre g != NULL && visited != NULL && u < g->num_vertices
+ * @pre g->adj != NULL && g->adj_size != NULL
+ * @pre Para todo i: g->adj[u][i] < g->num_vertices (vizinhos válidos)
+ *
+ * @post visited[u] = true
+ * @post Se retornar true, existe um ciclo no componente conectado de u
+ *
+ * @note Esta função é interna e deve ser chamada por uma função pública de detecção de ciclo.
+ * @note Complexidade: O(V + E) onde V = vértices, E = arestas
+ * @note Espaço na pilha: O(V) no pior caso (grafo linear)
+ * @warning Em grafos muito profundos pode causar stack overflow. Considere versão iterativa para aplicações críticas.
+ * @see CERT C: API00-C, ARR30-C, DCL13-C, REC01-C, ERR33-C
  */
-static bool has_cycle_util(const Graph *g, int v, bool visited[], int parent)
+static bool has_cycle_util(const Graph *g, size_t u, bool visited[], size_t parent)
 {
-    visited[v] = true;
-
-    for (size_t i = 0; i < g->adj_size[v]; i++)
+    // Validação defensiva de parâmetros (API00-C)
+    if (g == NULL || visited == NULL || u >= g->num_vertices)
     {
-        int neigh = g->adj[v][i];
-        if (!visited[neigh])
+        fprintf(stderr, "[ERRO] has_cycle_util: Parâmetros inválidos (g=%p, u=%zu, visited=%p, num_vertices=%zu).\n",
+                (void *)g, u, (void *)visited, g ? g->num_vertices : 0);
+        return false;
+    }
+
+    // Validação adicional da estrutura do grafo
+    if (g->adj == NULL || g->adj_size == NULL)
+    {
+        fprintf(stderr, "[ERRO] has_cycle_util: Estrutura de grafo inválida (adj=%p, adj_size=%p).\n",
+                (void *)g->adj, (void *)g->adj_size);
+        return false;
+    }
+
+    // Marca o vértice atual como visitado
+    visited[u] = true;
+
+    // Explora todos os vizinhos do vértice atual
+    for (size_t i = 0; i < g->adj_size[u]; i++)
+    {
+        // Validação de lista de adjacência (ARR30-C)
+        if (g->adj[u] == NULL)
         {
-            if (has_cycle_util(g, neigh, visited, v))
+            fprintf(stderr, "[AVISO] has_cycle_util: Lista de adjacência nula para vértice %zu. Ignorando.\n", u);
+            continue;
+        }
+
+        size_t v = g->adj[u][i];
+
+        // Validação do vizinho (ARR30-C)
+        if (v >= g->num_vertices)
+        {
+            fprintf(stderr, "[AVISO] has_cycle_util: Vizinho inválido (%zu) encontrado para vértice %zu. Ignorando.\n", v, u);
+            continue;
+        }
+
+        if (!visited[v])
+        {
+            if (has_cycle_util(g, v, visited, (size_t)u))
                 return true;
         }
-        else if (neigh != parent)
+        else if ((size_t)v != parent)
         {
             // Se o vizinho já foi visitado e não é o pai, há ciclo
             return true;
         }
     }
+
+    // Nenhum ciclo encontrado a partir deste vértice
     return false;
 }
-
 /*
  * Verifica se o grafo possui ciclo.
  * Esta detecção está correta apenas para grafos não-direcionados.
