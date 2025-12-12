@@ -21,6 +21,17 @@ typedef struct
     bool directed;       // Indica se o grafo é direcionado
 } Graph;
 
+/**
+ * @brief Estrutura que representa uma aresta entre dois vértices.
+ * @note v1 e v2 devem ser índices válidos de vértices (0 <= v < num_vertices).
+ * @note Para máxima portabilidade, prefira size_t em novos projetos.
+ */
+typedef struct
+{
+    int v1;
+    int v2;
+} Edge;
+
 /******************** FUNÇÕES AUXILIARES DE MEMÓRIA ********************/
 
 /**
@@ -615,20 +626,53 @@ static bool has_cycle_util(const Graph *g, size_t u, bool visited[], size_t pare
     // Nenhum ciclo encontrado a partir deste vértice
     return false;
 }
-/*
- * Verifica se o grafo possui ciclo.
- * Esta detecção está correta apenas para grafos não-direcionados.
- * Para grafos direcionados, seria necessário outro algoritmo (ex: DFS com pilha de recursão).
+/**
+ * @brief Verifica se o grafo possui ciclo (apenas para grafos não-direcionados).
+ *
+ * @param[in] g Ponteiro constante para o grafo.
+ * @return true se o grafo possui ciclo, false caso contrário ou em caso de erro.
+ *
+ * @pre g != NULL && g->num_vertices > 0
+ * @note O algoritmo é válido apenas para grafos não-direcionados.
+ * @note O usuário deve garantir que o grafo está corretamente inicializado.
+ * @note Em caso de erro, imprime mensagem em stderr e retorna false.
+ * @see has_cycle_util
+ * @see SEI CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, DCL13-C
  */
 bool has_cycle(const Graph *g)
 {
-    bool *visited = (bool *)safe_calloc(g->num_vertices, sizeof(bool));
+    // Validação de ponteiro e estrutura (API00-C)
+    if (g == NULL)
+    {
+        fprintf(stderr, "[ERRO] has_cycle: Grafo é NULL.\n");
+        return false;
+    }
+    if (g->num_vertices == 0 || g->adj == NULL || g->adj_size == NULL)
+    {
+        fprintf(stderr, "[ERRO] has_cycle: Grafo malformado ou sem vértices.\n");
+        return false;
+    }
+    if (g->num_vertices > SIZE_MAX / sizeof(bool))
+    {
+        fprintf(stderr, "[ERRO] has_cycle: Overflow no cálculo do vetor visited.\n");
+        return false;
+    }
 
+    // Alocação segura do vetor de visitados (MEM35-C)
+    bool *visited = (bool *)safe_calloc(g->num_vertices, sizeof(bool));
+    if (!visited)
+    {
+        fprintf(stderr, "[ERRO] has_cycle: Falha ao alocar vetor visited.\n");
+        return false;
+    }
+
+    // Percorre todos os vértices para cobrir componentes desconexos
     for (size_t v = 0; v < g->num_vertices; v++)
     {
         if (!visited[v])
         {
-            if (has_cycle_util(g, (int)v, visited, -1))
+            // Usa SIZE_MAX como sentinela para "sem pai" (eliminando ssize_t e -1)
+            if (has_cycle_util(g, v, visited, SIZE_MAX))
             {
                 free(visited);
                 return true;
@@ -645,45 +689,120 @@ typedef struct
     int v1, v2;
 } Edge;
 
-/*
- * Retorna a lista de arestas do grafo.
- * O usuário libera a memória do array retornado.
- * as_tuple (bool) não faz diferença tão grande aqui, mas mantemos por compatibilidade.
+/**
+ * @brief Retorna um array dinâmico com todas as arestas do grafo.
+ * @param[in]  g         Ponteiro constante para o grafo.
+ * @param[in]  as_tuple  Parâmetro mantido por compatibilidade (não afeta a saída).
+ * @param[out] num_edges Ponteiro para size_t que receberá o número de arestas.
+ * @return Ponteiro para array dinâmico de Edge, ou NULL em caso de erro.
+ * @pre g != NULL, num_edges != NULL
+ * @post O usuário é responsável por liberar o array retornado.
+ * @note Em caso de erro, imprime mensagem em stderr, retorna NULL e *num_edges = 0.
+ * @note CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, DCL13-C
  */
 Edge *get_edges(const Graph *g, bool as_tuple, size_t *num_edges)
 {
+    // Validação dos parâmetros de entrada (API00-C)
+    if (g == NULL || num_edges == NULL)
+    {
+        fprintf(stderr, "[ERRO] get_edges: Parâmetro(s) nulo(s).\n");
+        if (num_edges)
+            *num_edges = 0;
+        return NULL;
+    }
     *num_edges = 0;
-    // Estimativa superdimensionada, no pior caso um grafo completo tem O(n²) arestas.
-    // Ajustaremos depois com realloc se quiser.
+
+    if (g->num_vertices == 0 || g->adj == NULL || g->adj_size == NULL)
+    {
+        fprintf(stderr, "[ERRO] get_edges: Grafo malformado ou sem vértices.\n");
+        return NULL;
+    }
+    if (g->num_vertices > SIZE_MAX / sizeof(Edge))
+    {
+        fprintf(stderr, "[ERRO] get_edges: Overflow no cálculo da capacidade de arestas.\n");
+        return NULL;
+    }
+
+    // Estimativa superdimensionada: n^2 (pior caso)
     size_t capacity = g->num_vertices * g->num_vertices;
+    if (capacity == 0 || capacity > SIZE_MAX / sizeof(Edge))
+    {
+        fprintf(stderr, "[ERRO] get_edges: Capacidade de arestas inválida ou overflow.\n");
+        return NULL;
+    }
+
     Edge *edges = (Edge *)safe_malloc(capacity * sizeof(Edge));
+    if (!edges)
+    {
+        fprintf(stderr, "[ERRO] get_edges: Falha ao alocar array de arestas.\n");
+        return NULL;
+    }
 
     bool *processed = NULL;
     if (!g->directed)
     {
+        if (capacity > SIZE_MAX / sizeof(bool))
+        {
+            fprintf(stderr, "[ERRO] get_edges: Overflow no cálculo do vetor processed.\n");
+            free(edges);
+            return NULL;
+        }
         processed = (bool *)safe_calloc(capacity, sizeof(bool));
+        if (!processed)
+        {
+            fprintf(stderr, "[ERRO] get_edges: Falha ao alocar vetor processed.\n");
+            free(edges);
+            return NULL;
+        }
     }
 
     for (size_t v = 0; v < g->num_vertices; v++)
     {
+        if (g->adj[v] == NULL)
+            continue;
         for (size_t i = 0; i < g->adj_size[v]; i++)
         {
-            int w = g->adj[v][i];
+            int w = (int)g->adj[v][i];
+            if ((size_t)w >= g->num_vertices)
+            {
+                fprintf(stderr, "[AVISO] get_edges: Vizinho inválido (%d) em v=%zu. Ignorando.\n", w, v);
+                continue;
+            }
             if (g->directed)
             {
-                // Grafo dirigido: adiciona a aresta (v, w)
+                if (*num_edges >= capacity)
+                {
+                    fprintf(stderr, "[ERRO] get_edges: Capacidade de arestas excedida.\n");
+                    if (processed)
+                        free(processed);
+                    free(edges);
+                    *num_edges = 0;
+                    return NULL;
+                }
                 edges[*num_edges].v1 = (int)v;
                 edges[*num_edges].v2 = w;
                 (*num_edges)++;
             }
             else
             {
-                // Grafo não dirigido: armazenamos a aresta ordenada
                 int min = ((int)v < w) ? (int)v : w;
                 int max = ((int)v < w) ? w : (int)v;
                 size_t index = (size_t)min * g->num_vertices + (size_t)max;
+                if (index >= capacity)
+                {
+                    fprintf(stderr, "[AVISO] get_edges: Índice processed fora do limite (%zu).\n", index);
+                    continue;
+                }
                 if (!processed[index])
                 {
+                    if (*num_edges >= capacity)
+                    {
+                        fprintf(stderr, "[ERRO] get_edges: Capacidade de arestas excedida.\n");
+                        free(processed);
+                        free(edges);
+                        *num_edges = 0;
+                        return NULL;
+                    }
                     edges[*num_edges].v1 = min;
                     edges[*num_edges].v2 = max;
                     processed[index] = true;
@@ -693,48 +812,132 @@ Edge *get_edges(const Graph *g, bool as_tuple, size_t *num_edges)
         }
     }
 
-    // Redimensiona edges para o tamanho real
-    edges = (Edge *)safe_realloc(edges, (*num_edges) * sizeof(Edge));
+    // Redimensiona edges para o tamanho real (MEM35-C)
+    if (*num_edges > 0)
+    {
+        Edge *resized = (Edge *)safe_realloc(edges, (*num_edges) * sizeof(Edge));
+        if (resized)
+        {
+            edges = resized;
+        }
+        else
+        {
+            fprintf(stderr, "[AVISO] get_edges: Falha ao redimensionar array de arestas. Mantendo tamanho superestimado.\n");
+            // edges ainda é válido, mas ocupa mais memória que o necessário
+        }
+    }
+    else
+    {
+        // Nenhuma aresta encontrada
+        free(edges);
+        edges = NULL;
+    }
+
     if (processed)
         free(processed);
     return edges;
 }
 
-/*
- * Imprime informações sobre o grafo, similar ao __str__ do Python.
+/**
+ * @brief Imprime informações detalhadas sobre o grafo, incluindo vértices e arestas.
+ *        Similar ao método __str__ do Python para representação de objetos.
+ *
+ * @param[in] g Ponteiro constante para o grafo.
+ * @pre g != NULL && g->adj != NULL && g->adj_size != NULL
+ * @post Imprime a representação do grafo no stdout. Não altera o estado do grafo.
+ * @return Void
+ * @note Se o grafo for vazio (g->num_vertices == 0), imprime mensagem informativa.
+ * @note Se funções auxiliares falharem, imprime mensagem de erro em stderr.
+ * @note Complexidade: O(V + E), onde V = número de vértices, E = número de arestas.
+ * @warning Não é thread-safe se o grafo puder ser modificado por outras threads durante a execução.
+ * @see get_edges
+ * @code
+ * print_graph(g);
+ * @endcode
+ * @note CERT C: API00-C, DCL13-C, ERR33-C, ARR30-C, MEM35-C
  */
 void print_graph(const Graph *g)
 {
-    printf("Vertices: ");
+    // Validação de ponteiro e estrutura (API00-C, DCL13-C)
+    if (g == NULL)
+    {
+        fprintf(stderr, "[ERRO] print_graph: Grafo é NULL. Não é possível imprimir.\n");
+        return;
+    }
+    if (g->adj == NULL || g->adj_size == NULL)
+    {
+        fprintf(stderr, "[ERRO] print_graph: Estrutura interna do grafo é inválida (adj ou adj_size é NULL).\n");
+        return;
+    }
+    if (g->num_vertices == 0)
+    {
+        printf("Grafo vazio (0 vértices).\n");
+        return;
+    }
+
+    printf("--- Informações do Grafo ---\n");
+
+    // Imprime vértices
+    printf("Vértices (%zu): ", g->num_vertices);
     for (size_t i = 0; i < g->num_vertices; i++)
     {
         printf("%zu ", i);
     }
-    printf("\nNumber of Vertices: %zu\n", g->num_vertices);
+    printf("\n");
 
-    size_t num_edges;
+    // Obtém e imprime arestas
+    size_t num_edges = 0;
     Edge *edges = get_edges(g, true, &num_edges);
 
-    printf("Edges: ");
-    for (size_t i = 0; i < num_edges; i++)
+    printf("Arestas (%zu): ", num_edges);
+    if (edges != NULL)
     {
-        printf("(%d, %d) ", edges[i].v1, edges[i].v2);
+        for (size_t i = 0; i < num_edges; i++)
+        {
+            printf("(%d, %d)%s", edges[i].v1, edges[i].v2, (i == num_edges - 1) ? "" : ", ");
+        }
+        free(edges);
     }
-    printf("\nNumber of Edges: %zu\n", num_edges);
+    else
+    {
+        printf("Nenhuma aresta (ou erro ao obter arestas).");
+    }
+    printf("\n");
 
-    free(edges);
+    printf("Tipo: %s\n", g->directed ? "Direcionado" : "Não Direcionado");
+    printf("---------------------------\n");
 }
 
-/*
- * Lê um arquivo e cria um grafo a partir dele.
- * O arquivo deve conter arestas com dois inteiros por linha.
+/**
+ * @brief Lê um arquivo e cria um grafo a partir dele.
+ *        O arquivo deve conter o número de arestas na primeira linha
+ *        e, nas linhas seguintes, pares de inteiros representando as arestas.
+ *
+ * @param[in]  file_path Caminho do arquivo de entrada (não pode ser NULL).
+ * @param[in]  directed  true para grafo dirigido, false para não dirigido.
+ * @return Ponteiro para o grafo criado, ou NULL em caso de erro.
+ *
+ * @note O arquivo deve ter o formato:
+ *       <num_arestas>
+ *       <v1>, <v2>
+ *       <v1>, <v2>
+ *       ...
+ * @note O usuário é responsável por liberar o grafo criado.
+ * @note CERT C: API00-C, FIO34-C, MEM35-C, ERR33-C, DCL13-C, INT30-C
  */
 Graph *graph_from_file(const char *file_path, bool directed)
 {
+    // Validação de parâmetros (API00-C, DCL13-C)
+    if (file_path == NULL)
+    {
+        fprintf(stderr, "[ERRO] graph_from_file: Caminho do arquivo é NULL.\n");
+        return NULL;
+    }
+
     FILE *file = fopen(file_path, "r");
     if (!file)
     {
-        fprintf(stderr, "Erro ao abrir arquivo '%s'\n", file_path);
+        fprintf(stderr, "[ERRO] graph_from_file: Erro ao abrir arquivo '%s'.\n", file_path);
         return NULL;
     }
 
@@ -744,63 +947,99 @@ Graph *graph_from_file(const char *file_path, bool directed)
         char line[256];
         if (!fgets(line, sizeof(line), file))
         {
-            fprintf(stderr, "Erro ao ler o número de arestas.\n");
+            fprintf(stderr, "[ERRO] graph_from_file: Erro ao ler o número de arestas.\n");
             fclose(file);
             return NULL;
         }
         if (sscanf(line, "%d", &num_edges) != 1 || num_edges <= 0)
         {
-            fprintf(stderr, "Número de arestas inválido.\n");
+            fprintf(stderr, "[ERRO] graph_from_file: Número de arestas inválido.\n");
             fclose(file);
             return NULL;
         }
     }
 
-    // Agora sabemos quantas arestas esperar. Precisamos determinar o maior vértice.
-    // Vamos primeiro armazenar as arestas em memória para depois criar o grafo do tamanho adequado.
-    int *edges_a = (int *)safe_malloc(num_edges * sizeof(int));
-    int *edges_b = (int *)safe_malloc(num_edges * sizeof(int));
-
-    int max_vertex = -1;
+    // Prevenção de overflow (MEM35-C, INT30-C)
+    if ((size_t)num_edges > SIZE_MAX / sizeof(int))
     {
-        for (int i = 0; i < num_edges; i++)
-        {
-            char line[256];
-            if (!fgets(line, sizeof(line), file))
-            {
-                fprintf(stderr, "Erro ao ler a aresta %d.\n", i + 1);
-                free(edges_a);
-                free(edges_b);
-                fclose(file);
-                return NULL;
-            }
-
-            int a, b;
-            // Note o formato "%d, %d" para ler algo como "1, 2"
-            if (sscanf(line, "%d, %d", &a, &b) != 2)
-            {
-                fprintf(stderr, "Formato de aresta inválido na linha %d.\n", i + 2); // +2: primeira linha é número de arestas
-                free(edges_a);
-                free(edges_b);
-                fclose(file);
-                return NULL;
-            }
-
-            edges_a[i] = a;
-            edges_b[i] = b;
-
-            if (a > max_vertex)
-                max_vertex = a;
-            if (b > max_vertex)
-                max_vertex = b;
-        }
+        fprintf(stderr, "[ERRO] graph_from_file: Número de arestas muito grande (overflow).\n");
+        fclose(file);
+        return NULL;
     }
 
-    // Volta ao início do arquivo não é mais necessário, pois já armazenamos tudo.
+    int *edges_a = (int *)safe_malloc((size_t)num_edges * sizeof(int));
+    int *edges_b = (int *)safe_malloc((size_t)num_edges * sizeof(int));
+    if (!edges_a || !edges_b)
+    {
+        fprintf(stderr, "[ERRO] graph_from_file: Falha ao alocar memória para arestas.\n");
+        if (edges_a)
+            free(edges_a);
+        if (edges_b)
+            free(edges_b);
+        fclose(file);
+        return NULL;
+    }
+
+    int max_vertex = -1;
+    for (int i = 0; i < num_edges; i++)
+    {
+        char line[256];
+        if (!fgets(line, sizeof(line), file))
+        {
+            fprintf(stderr, "[ERRO] graph_from_file: Erro ao ler a aresta %d.\n", i + 1);
+            free(edges_a);
+            free(edges_b);
+            fclose(file);
+            return NULL;
+        }
+
+        int a, b;
+        if (sscanf(line, "%d, %d", &a, &b) != 2)
+        {
+            fprintf(stderr, "[ERRO] graph_from_file: Formato de aresta inválido na linha %d.\n", i + 2);
+            free(edges_a);
+            free(edges_b);
+            fclose(file);
+            return NULL;
+        }
+
+        if (a < 0 || b < 0)
+        {
+            fprintf(stderr, "[ERRO] graph_from_file: Vértice negativo na linha %d: (%d, %d).\n", i + 2, a, b);
+            free(edges_a);
+            free(edges_b);
+            fclose(file);
+            return NULL;
+        }
+
+        edges_a[i] = a;
+        edges_b[i] = b;
+
+        if (a > max_vertex)
+            max_vertex = a;
+        if (b > max_vertex)
+            max_vertex = b;
+    }
+
     fclose(file);
 
-    // Agora cria o grafo com o tamanho max_vertex + 1
+    // Prevenção de overflow ao criar o grafo (MEM35-C, INT30-C)
+    if (max_vertex < 0 || (size_t)max_vertex >= SIZE_MAX)
+    {
+        fprintf(stderr, "[ERRO] graph_from_file: Índice de vértice fora do intervalo suportado.\n");
+        free(edges_a);
+        free(edges_b);
+        return NULL;
+    }
+
     Graph *g = create_graph((size_t)max_vertex + 1, directed);
+    if (!g)
+    {
+        fprintf(stderr, "[ERRO] graph_from_file: Falha ao criar o grafo.\n");
+        free(edges_a);
+        free(edges_b);
+        return NULL;
+    }
 
     // Adiciona as arestas
     for (int i = 0; i < num_edges; i++)
@@ -810,13 +1049,13 @@ Graph *graph_from_file(const char *file_path, bool directed)
 
         if (a < 0 || b < 0 || a > max_vertex || b > max_vertex)
         {
-            fprintf(stderr, "Aresta (%d, %d) fora do intervalo esperado.\n", a, b);
-            // Não encerramos abruptamente, mas em um caso real poderíamos tratar isso melhor.
-            // Aqui apenas continuamos. Se preferir, você pode encerrar o programa.
+            fprintf(stderr, "[AVISO] graph_from_file: Aresta (%d, %d) fora do intervalo esperado. Ignorando.\n", a, b);
+            continue;
         }
-        else
+        if (add_edge(g, (size_t)a, (size_t)b) != 0)
         {
-            add_edge(g, a, b);
+            fprintf(stderr, "[AVISO] graph_from_file: Falha ao adicionar aresta (%d, %d).\n", a, b);
+            // Continua tentando adicionar as demais arestas
         }
     }
 
@@ -825,41 +1064,98 @@ Graph *graph_from_file(const char *file_path, bool directed)
     return g;
 }
 
-/*
- * Libera a memória alocada para o grafo.
+/**
+ * @brief Libera toda a memória alocada dinamicamente para a estrutura do grafo.
+ *
+ * Esta função libera, de forma segura e robusta, todos os recursos associados a um grafo,
+ * incluindo as listas de adjacência de cada vértice, o vetor de ponteiros para as listas,
+ * o vetor de tamanhos das listas e a própria estrutura do grafo.
+ *
+ * @param[in,out] g Ponteiro para o grafo a ser liberado. Após a chamada, o ponteiro
+ *                  'g' não deve ser mais utilizado, pois a memória para a qual ele
+ *                  aponta será inválida.
+ * @pre g pode ser NULL (a função trata isso graciosamente).
+ * @post Toda a memória associada ao grafo 'g' é liberada.
+ * @note Esta função é idempotente: chamar free_graph(NULL) ou chamar free_graph
+ *       em um grafo já liberado (se o ponteiro for NULL) é seguro.
+ * @note Após a chamada, o ponteiro passado não é modificado (passagem por valor).
+ * @note CERT C: MEM31-C, MEM30-C, MEM35-C, API00-C, DCL13-C, ERR33-C
  */
 void free_graph(Graph *g)
 {
-    if (!g)
-        return;
-    for (size_t i = 0; i < g->num_vertices; i++)
+    if (g == NULL)
     {
-        free(g->adj[i]);
+        // Função idempotente para ponteiros nulos
+        return;
     }
-    free(g->adj);
-    free(g->adj_size);
+
+    // Libera listas de adjacência de cada vértice, se existirem
+    if (g->adj != NULL)
+    {
+        for (size_t i = 0; i < g->num_vertices; i++)
+        {
+            if (g->adj[i] != NULL)
+            {
+                free(g->adj[i]);
+                g->adj[i] = NULL; // Previne double-free se a estrutura sobreviver
+            }
+        }
+        free(g->adj);
+        g->adj = NULL;
+    }
+
+    // Libera vetor de tamanhos das listas de adjacência
+    if (g->adj_size != NULL)
+    {
+        free(g->adj_size);
+        g->adj_size = NULL;
+    }
+
+    // Libera a própria estrutura do grafo
     free(g);
+    // Não é possível modificar o ponteiro do chamador (passagem por valor)
 }
 
 /******************** FUNÇÃO PRINCIPAL (EXEMPLO) ********************/
 
+/**
+ * @brief Função principal de demonstração de operações com grafos.
+ *
+ * Lê um grafo de um arquivo, imprime sua estrutura, executa buscas BFS e DFS,
+ * verifica a existência de ciclos e libera todos os recursos alocados.
+ *
+ * @return EXIT_SUCCESS em caso de sucesso, EXIT_FAILURE em caso de erro crítico.
+ *
+ * @note O arquivo "grafo.txt" deve estar no formato:
+ *       <num_arestas>
+ *       <v1>, <v2>
+ *       <v1>, <v2>
+ *       ...
+ * @note Não utiliza ssize_t em nenhum momento.
+ * @note Regras CERT C aplicadas: API00-C, ERR33-C, MEM31-C, DCL13-C, INT30-C
+ */
 int main(void)
 {
-    // Exemplo de uso:
-    // Supõe um arquivo "grafo.txt" com uma aresta por linha no formato:
-    // a, b
-    // ...
-    Graph *g = graph_from_file("./grafo.txt", false);
+    int exit_status = EXIT_SUCCESS;
+    Graph *g = NULL;
+    int *bfs_result = NULL;
+    int *dfs_result = NULL;
+
+    // Cria o grafo a partir do arquivo
+    g = graph_from_file("./grafo.txt", false);
     if (g == NULL)
     {
-        fprintf(stderr, "Grafo não pôde ser criado a partir do arquivo.\n");
-        return EXIT_FAILURE;
+        fprintf(stderr, "[ERRO] main: Grafo não pôde ser criado a partir do arquivo.\n");
+        exit_status = EXIT_FAILURE;
+        goto cleanup;
     }
 
+    // Imprime informações do grafo
     print_graph(g);
 
-    int *bfs_result = bfs(g, 0);
-    if (bfs_result)
+    // Executa BFS a partir do vértice 0
+    bfs_result = bfs(g, 0);
+    if (bfs_result != NULL)
     {
         printf("BFS (iniciando em 0): ");
         for (size_t i = 0; i < g->num_vertices; i++)
@@ -867,11 +1163,17 @@ int main(void)
             printf("%d ", bfs_result[i]);
         }
         printf("\n");
-        free(bfs_result);
+    }
+    else
+    {
+        fprintf(stderr, "[ERRO] main: Falha ao executar BFS.\n");
+        exit_status = EXIT_FAILURE;
+        goto cleanup;
     }
 
-    int *dfs_result = dfs(g, 0);
-    if (dfs_result)
+    // Executa DFS a partir do vértice 0
+    dfs_result = dfs(g, 0);
+    if (dfs_result != NULL)
     {
         printf("DFS (iniciando em 0): ");
         for (size_t i = 0; i < g->num_vertices; i++)
@@ -879,11 +1181,33 @@ int main(void)
             printf("%d ", dfs_result[i]);
         }
         printf("\n");
-        free(dfs_result);
+    }
+    else
+    {
+        fprintf(stderr, "[ERRO] main: Falha ao executar DFS.\n");
+        exit_status = EXIT_FAILURE;
+        goto cleanup;
     }
 
+    // Verifica se o grafo possui ciclo
     printf("Has cycle: %s\n", has_cycle(g) ? "Yes" : "No");
 
-    free_graph(g);
-    return EXIT_SUCCESS;
+cleanup:
+    // Libera recursos alocados
+    if (bfs_result != NULL)
+    {
+        free(bfs_result);
+        bfs_result = NULL;
+    }
+    if (dfs_result != NULL)
+    {
+        free(dfs_result);
+        dfs_result = NULL;
+    }
+    if (g != NULL)
+    {
+        free_graph(g);
+        g = NULL;
+    }
+    return exit_status;
 }
