@@ -2551,6 +2551,189 @@ size_t *topological_sort(const Graph *g)
     return order;
 }
 
+/**
+ * @brief Detecta pontes (arestas críticas) e pontos de articulação (vértices críticos) em um grafo não direcionado.
+ *
+ * @param[in]  g             Ponteiro para o grafo (deve ser não direcionado).
+ * @param[out] out_bridges   (Opcional) Array dinâmico de arestas que são pontes (Edge*). O usuário deve liberar.
+ * @param[out] out_nbridges  (Opcional) Número de pontes encontradas.
+ * @param[out] out_artics    (Opcional) Array dinâmico de vértices que são pontos de articulação (size_t*). O usuário deve liberar.
+ * @param[out] out_nartics   (Opcional) Número de pontos de articulação encontrados.
+ * @return 0 em caso de sucesso, -1 em caso de erro (parâmetros inválidos ou falha de alocação).
+ *
+ * @note O usuário é responsável por liberar os arrays retornados.
+ * @note Retorna 0 mesmo se não houver pontes/articulações (arrays vazios).
+ * @note Regras CERT: API00-C, ARR30-C, MEM35-C, ERR33-C, INT30-C
+ * @example
+ * Edge *bridges = NULL; size_t nbridges = 0;
+ * size_t *artics = NULL; size_t nartics = 0;
+ * if (detect_bridges_articulations(g, &bridges, &nbridges, &artics, &nartics) == 0) {
+ *     for (size_t i = 0; i < nbridges; i++)
+ *         printf("Ponte: (%zu, %zu)\n", bridges[i].v1, bridges[i].v2);
+ *     for (size_t i = 0; i < nartics; i++)
+ *         printf("Articulação: %zu\n", artics[i]);
+ *     free(bridges); free(artics);
+ * }
+ */
+int detect_bridges_articulations(
+    const Graph *g,
+    Edge **out_bridges, size_t *out_nbridges,
+    size_t **out_artics, size_t *out_nartics)
+{
+    if (out_bridges)
+        *out_bridges = NULL;
+    if (out_nbridges)
+        *out_nbridges = 0;
+    if (out_artics)
+        *out_artics = NULL;
+    if (out_nartics)
+        *out_nartics = 0;
+    if (!g || !g->adj || !g->adj_size || g->directed)
+        return -1;
+
+    size_t n = g->num_vertices;
+    if (n == 0)
+        return 0;
+
+    int *dfs_num = (int *)malloc(n * sizeof(int));
+    int *dfs_low = (int *)malloc(n * sizeof(int));
+    int *parent = (int *)malloc(n * sizeof(int));
+    bool *visited = (bool *)calloc(n, sizeof(bool));
+    bool *is_artic = (bool *)calloc(n, sizeof(bool));
+    Edge *bridges = (Edge *)malloc(n * n * sizeof(Edge)); // Limite superior
+    size_t *artics = (size_t *)malloc(n * sizeof(size_t));
+    if (!dfs_num || !dfs_low || !parent || !visited || !is_artic || !bridges || !artics)
+    {
+        free(dfs_num);
+        free(dfs_low);
+        free(parent);
+        free(visited);
+        free(is_artic);
+        free(bridges);
+        free(artics);
+        return -1;
+    }
+
+    int time = 0;
+    size_t nbridges = 0, nartics = 0;
+
+    // Função recursiva interna
+    void dfs(size_t u, int *time)
+    {
+        visited[u] = true;
+        dfs_num[u] = dfs_low[u] = (*time)++;
+        int children = 0;
+        for (size_t k = 0; k < g->adj_size[u]; k++)
+        {
+            size_t v = g->adj[u][k];
+            if (!visited[v])
+            {
+                parent[v] = (int)u;
+                children++;
+                dfs(v, time);
+                if (dfs_low[u] > dfs_low[v])
+                    dfs_low[u] = dfs_low[v];
+                // Ponte: se dfs_low[v] > dfs_num[u]
+                if (dfs_low[v] > dfs_num[u])
+                {
+                    bridges[nbridges].v1 = u;
+                    bridges[nbridges].v2 = v;
+                    nbridges++;
+                }
+                // Articulação: se não for raiz e dfs_low[v] >= dfs_num[u]
+                if (parent[u] != -1 && dfs_low[v] >= dfs_num[u])
+                    is_artic[u] = true;
+            }
+            else if ((size_t)parent[u] != v)
+            {
+                // Back edge
+                if (dfs_low[u] > dfs_num[v])
+                    dfs_low[u] = dfs_num[v];
+            }
+        }
+        // Articulação: raiz com dois ou mais filhos
+        if (parent[u] == -1 && children > 1)
+            is_artic[u] = true;
+    }
+
+    // Inicialização
+    for (size_t i = 0; i < n; i++)
+    {
+        dfs_num[i] = -1;
+        dfs_low[i] = -1;
+        parent[i] = -1;
+        visited[i] = false;
+        is_artic[i] = false;
+    }
+
+    for (size_t u = 0; u < n; u++)
+    {
+        if (!visited[u])
+        {
+            int t = time;
+            dfs(u, &t);
+        }
+    }
+
+    // Coleta pontos de articulação
+    for (size_t i = 0; i < n; i++)
+    {
+        if (is_artic[i])
+            artics[nartics++] = i;
+    }
+
+    // Ajusta arrays de saída
+    if (out_bridges && nbridges > 0)
+    {
+        *out_bridges = (Edge *)malloc(nbridges * sizeof(Edge));
+        if (!*out_bridges)
+        {
+            free(dfs_num);
+            free(dfs_low);
+            free(parent);
+            free(visited);
+            free(is_artic);
+            free(bridges);
+            free(artics);
+            return -1;
+        }
+        for (size_t i = 0; i < nbridges; i++)
+            (*out_bridges)[i] = bridges[i];
+    }
+    if (out_nbridges)
+        *out_nbridges = nbridges;
+    if (out_artics && nartics > 0)
+    {
+        *out_artics = (size_t *)malloc(nartics * sizeof(size_t));
+        if (!*out_artics)
+        {
+            free(dfs_num);
+            free(dfs_low);
+            free(parent);
+            free(visited);
+            free(is_artic);
+            free(bridges);
+            free(artics);
+            if (out_bridges && *out_bridges)
+                free(*out_bridges);
+            return -1;
+        }
+        for (size_t i = 0; i < nartics; i++)
+            (*out_artics)[i] = artics[i];
+    }
+    if (out_nartics)
+        *out_nartics = nartics;
+
+    free(dfs_num);
+    free(dfs_low);
+    free(parent);
+    free(visited);
+    free(is_artic);
+    free(bridges);
+    free(artics);
+    return 0;
+}
+
 /******************** FUNÇÃO PRINCIPAL (EXEMPLO) ********************/
 
 /**
