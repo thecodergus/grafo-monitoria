@@ -1832,6 +1832,315 @@ int kruskal_mst(const Graph *g, WeightedEdge **out_edges, size_t *out_nedges)
     return total_weight;
 }
 
+/**
+ * @brief Encontra um caminho ou circuito Euleriano usando o Algoritmo de Hierholzer.
+ *
+ * @param[in]  g        Ponteiro para o grafo (não pode ser NULL).
+ * @param[in]  start    Vértice inicial (0 <= start < g->num_vertices).
+ * @param[out] out_path (Opcional) Recebe array dinâmico com o caminho Euleriano (sequência de vértices).
+ * @param[out] out_len  (Opcional) Recebe o número de vértices do caminho.
+ * @return true se existe caminho/circuito Euleriano a partir de start, false caso contrário.
+ *
+ * @note O usuário é responsável por liberar o array retornado em out_path.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, INT30-C
+ * @example
+ * int *euler_path = NULL;
+ * size_t path_len = 0;
+ * if (hierholzer_eulerian_path(g, 0, &euler_path, &path_len) && euler_path) {
+ *     printf("Caminho Euleriano: ");
+ *     for (size_t i = 0; i < path_len; i++)
+ *         printf("%d%s", euler_path[i], (i == path_len-1) ? "\n" : " -> ");
+ *     free(euler_path);
+ * } else {
+ *     printf("Não existe caminho Euleriano a partir do vértice 0.\n");
+ * }
+ */
+bool hierholzer_eulerian_path(const Graph *g, size_t start, int **out_path, size_t *out_len)
+{
+    if (out_path)
+        *out_path = NULL;
+    if (out_len)
+        *out_len = 0;
+    if (!g || !g->adj || !g->adj_size)
+        return false;
+    if (start >= g->num_vertices)
+        return false;
+    size_t n = g->num_vertices;
+
+    // 1. Verifica condições de existência de caminho/circuito Euleriano
+    size_t odd_count = 0, first_odd = SIZE_MAX;
+    for (size_t v = 0; v < n; v++)
+    {
+        size_t deg = g->adj_size[v];
+        if (!g->directed && (deg % 2 != 0))
+        {
+            odd_count++;
+            if (first_odd == SIZE_MAX)
+                first_odd = v;
+        }
+    }
+    if (!g->directed && odd_count != 0 && odd_count != 2)
+        return false;
+    if (!g->directed && odd_count == 2 && start != first_odd)
+        start = first_odd;
+
+    // 2. Cria cópia das listas de adjacência para manipulação local
+    size_t **adj_copy = malloc(n * sizeof(size_t *));
+    size_t *adj_size_copy = malloc(n * sizeof(size_t));
+    if (!adj_copy || !adj_size_copy)
+    {
+        free(adj_copy);
+        free(adj_size_copy);
+        return false;
+    }
+    for (size_t v = 0; v < n; v++)
+    {
+        adj_size_copy[v] = g->adj_size[v];
+        adj_copy[v] = malloc(adj_size_copy[v] * sizeof(size_t));
+        if (!adj_copy[v])
+        {
+            for (size_t i = 0; i < v; i++)
+                free(adj_copy[i]);
+            free(adj_copy);
+            free(adj_size_copy);
+            return false;
+        }
+        for (size_t k = 0; k < adj_size_copy[v]; k++)
+            adj_copy[v][k] = g->adj[v][k];
+    }
+
+    // 3. Pilha para caminho atual e vetor para caminho final
+    size_t *stack = malloc((g->num_vertices + 1) * sizeof(size_t));
+    int *circuit = malloc((g->num_vertices * g->num_vertices + 1) * sizeof(int));
+    if (!stack || !circuit)
+    {
+        for (size_t v = 0; v < n; v++)
+            free(adj_copy[v]);
+        free(adj_copy);
+        free(adj_size_copy);
+        free(stack);
+        free(circuit);
+        return false;
+    }
+    size_t stack_size = 0, circuit_size = 0;
+    stack[stack_size++] = start;
+
+    while (stack_size > 0)
+    {
+        size_t v = stack[stack_size - 1];
+        if (adj_size_copy[v] > 0)
+        {
+            size_t u = adj_copy[v][--adj_size_copy[v]];
+            // Remove a aresta também do outro lado se não direcionado
+            if (!g->directed)
+            {
+                for (size_t i = 0; i < adj_size_copy[u]; i++)
+                {
+                    if (adj_copy[u][i] == v)
+                    {
+                        adj_copy[u][i] = adj_copy[u][--adj_size_copy[u]];
+                        break;
+                    }
+                }
+            }
+            stack[stack_size++] = u;
+        }
+        else
+        {
+            circuit[circuit_size++] = (int)v;
+            stack_size--;
+        }
+    }
+
+    // Libera cópias das adjacências
+    for (size_t v = 0; v < n; v++)
+        free(adj_copy[v]);
+    free(adj_copy);
+    free(adj_size_copy);
+    free(stack);
+
+    // O caminho está invertido
+    if (out_path && circuit_size > 0)
+    {
+        int *path = malloc(circuit_size * sizeof(int));
+        if (!path)
+        {
+            free(circuit);
+            return false;
+        }
+        for (size_t i = 0; i < circuit_size; i++)
+            path[i] = circuit[circuit_size - 1 - i];
+        *out_path = path;
+        if (out_len)
+            *out_len = circuit_size;
+    }
+    free(circuit);
+    return true;
+}
+
+/**
+ * @brief Colore o grafo usando o algoritmo DSATUR (Degree of Saturation).
+ *
+ * @param[in]  g             Ponteiro para o grafo (não pode ser NULL).
+ * @param[out] out_colors    (Opcional) Recebe array dinâmico de cores atribuídas a cada vértice (0..n-1).
+ *                           O usuário é responsável por liberar o array retornado.
+ * @param[out] out_num_colors (Opcional) Recebe o número total de cores utilizadas.
+ * @return 0 em caso de sucesso, -1 em caso de erro (parâmetros inválidos ou falha de alocação).
+ *
+ * @note A função segue o padrão das demais funções do projeto: validação defensiva, documentação Doxygen,
+ *       tratamento robusto de erros, uso de size_t/int, e interface consistente.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, INT30-C, DCL13-C
+ * @example
+ * int *colors = NULL;
+ * int num_colors = 0;
+ * if (dsatur_coloring(g, &colors, &num_colors) == 0) {
+ *     printf("Grafo colorido com %d cores\n", num_colors);
+ *     for (size_t v = 0; v < g->num_vertices; v++)
+ *         printf("Vértice %zu: cor %d\n", v, colors[v]);
+ *     free(colors);
+ * }
+ */
+int dsatur_coloring(const Graph *g, int **out_colors, int *out_num_colors)
+{
+    if (out_colors)
+        *out_colors = NULL;
+    if (out_num_colors)
+        *out_num_colors = 0;
+    if (!g || !g->adj || !g->adj_size)
+        return -1;
+    size_t n = g->num_vertices;
+    if (n == 0)
+        return 0;
+
+    int *color = (int *)malloc(n * sizeof(int));
+    int *sat_deg = (int *)calloc(n, sizeof(int));
+    size_t *degree = (size_t *)malloc(n * sizeof(size_t));
+    bool **neighbor_colors = (bool **)malloc(n * sizeof(bool *));
+    if (!color || !sat_deg || !degree || !neighbor_colors)
+    {
+        free(color);
+        free(sat_deg);
+        free(degree);
+        free(neighbor_colors);
+        return -1;
+    }
+
+    for (size_t v = 0; v < n; v++)
+    {
+        color[v] = -1;
+        degree[v] = g->adj_size[v];
+        neighbor_colors[v] = (bool *)calloc(n, sizeof(bool));
+        if (!neighbor_colors[v])
+        {
+            for (size_t i = 0; i < v; i++)
+                free(neighbor_colors[i]);
+            free(color);
+            free(sat_deg);
+            free(degree);
+            free(neighbor_colors);
+            return -1;
+        }
+    }
+
+    // 1. Escolhe vértice de maior grau para começar
+    size_t first = 0;
+    for (size_t v = 1; v < n; v++)
+        if (degree[v] > degree[first])
+            first = v;
+    color[first] = 0;
+    int max_color = 0;
+
+    // Atualiza saturação dos vizinhos do primeiro vértice
+    for (size_t k = 0; k < g->adj_size[first]; k++)
+    {
+        size_t u = g->adj[first][k];
+        if (!neighbor_colors[u][0])
+        {
+            neighbor_colors[u][0] = true;
+            sat_deg[u]++;
+        }
+    }
+
+    // 2. Iteração principal do DSATUR
+    for (size_t step = 1; step < n; step++)
+    {
+        // Seleciona vértice não colorido de maior saturação (desempate por grau)
+        int max_sat = -1;
+        size_t candidate = SIZE_MAX;
+        for (size_t v = 0; v < n; v++)
+        {
+            if (color[v] != -1)
+                continue;
+            if (sat_deg[v] > max_sat ||
+                (sat_deg[v] == max_sat && degree[v] > (candidate != SIZE_MAX ? degree[candidate] : 0)))
+            {
+                max_sat = sat_deg[v];
+                candidate = v;
+            }
+        }
+        if (candidate == SIZE_MAX)
+            break;
+
+        // Acha menor cor disponível para o candidato
+        bool *used = (bool *)calloc(n, sizeof(bool));
+        if (!used)
+        {
+            for (size_t v = 0; v < n; v++)
+                free(neighbor_colors[v]);
+            free(color);
+            free(sat_deg);
+            free(degree);
+            free(neighbor_colors);
+            return -1;
+        }
+        for (size_t k = 0; k < g->adj_size[candidate]; k++)
+        {
+            size_t u = g->adj[candidate][k];
+            if (color[u] != -1)
+                used[color[u]] = true;
+        }
+        int c;
+        for (c = 0; c < (int)n; c++)
+            if (!used[c])
+                break;
+        color[candidate] = c;
+        if (c > max_color)
+            max_color = c;
+        free(used);
+
+        // Atualiza saturação dos vizinhos do candidato
+        for (size_t k = 0; k < g->adj_size[candidate]; k++)
+        {
+            size_t u = g->adj[candidate][k];
+            if (color[u] == -1 && !neighbor_colors[u][c])
+            {
+                neighbor_colors[u][c] = true;
+                sat_deg[u]++;
+            }
+        }
+    }
+
+    // Libera matrizes auxiliares
+    for (size_t v = 0; v < n; v++)
+        free(neighbor_colors[v]);
+    free(neighbor_colors);
+    free(sat_deg);
+    free(degree);
+
+    // Prepara saída
+    if (out_colors)
+    {
+        *out_colors = color;
+    }
+    else
+    {
+        free(color);
+    }
+    if (out_num_colors)
+        *out_num_colors = max_color + 1;
+    return 0;
+}
+
 /******************** FUNÇÃO PRINCIPAL (EXEMPLO) ********************/
 
 /**
