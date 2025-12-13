@@ -2141,6 +2141,337 @@ int dsatur_coloring(const Graph *g, int **out_colors, int *out_num_colors)
     return 0;
 }
 
+/**
+ * @brief Calcula o fluxo máximo entre source e sink usando Edmonds-Karp (BFS).
+ *
+ * @param[in]  g           Ponteiro para o grafo (não pode ser NULL).
+ * @param[in]  capacity    Matriz de capacidades (n x n), onde capacity[u][v] >= 0.
+ * @param[in]  source      Vértice de origem (0 <= source < g->num_vertices).
+ * @param[in]  sink        Vértice de destino (0 <= sink < g->num_vertices).
+ * @return Valor do fluxo máximo, ou -1 em caso de erro.
+ *
+ * @note O usuário é responsável por alocar e liberar a matriz de capacidades.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, INT30-C, ERR33-C
+ * @example
+ * int maxflow = edmonds_karp_max_flow(g, capacity, origem, destino);
+ * if (maxflow >= 0) {
+ *     printf("Fluxo máximo de %zu para %zu: %d\n", origem, destino, maxflow);
+ * } else {
+ *     printf("Erro ao calcular fluxo máximo.\n");
+ * }
+ */
+int edmonds_karp_max_flow(const Graph *g, int **capacity, size_t source, size_t sink)
+{
+    if (!g || !g->adj || !g->adj_size || !capacity)
+        return -1;
+    size_t n = g->num_vertices;
+    if (source >= n || sink >= n || source == sink)
+        return -1;
+
+    // Aloca matriz de capacidades residuais
+    int **residual = malloc(n * sizeof(int *));
+    if (!residual)
+        return -1;
+    for (size_t i = 0; i < n; i++)
+    {
+        residual[i] = malloc(n * sizeof(int));
+        if (!residual[i])
+        {
+            for (size_t j = 0; j < i; j++)
+                free(residual[j]);
+            free(residual);
+            return -1;
+        }
+        for (size_t j = 0; j < n; j++)
+            residual[i][j] = capacity[i][j];
+    }
+
+    int *parent = malloc(n * sizeof(int));
+    if (!parent)
+    {
+        for (size_t i = 0; i < n; i++)
+            free(residual[i]);
+        free(residual);
+        return -1;
+    }
+
+    int max_flow = 0;
+
+    // Função auxiliar: BFS para encontrar caminho aumentante
+    while (1)
+    {
+        bool *visited = calloc(n, sizeof(bool));
+        if (!visited)
+            break;
+        for (size_t i = 0; i < n; i++)
+            parent[i] = -1;
+        size_t *queue = malloc(n * sizeof(size_t));
+        if (!queue)
+        {
+            free(visited);
+            break;
+        }
+        size_t front = 0, back = 0;
+        queue[back++] = source;
+        visited[source] = true;
+        bool found = false;
+        while (front < back)
+        {
+            size_t u = queue[front++];
+            for (size_t k = 0; k < g->adj_size[u]; k++)
+            {
+                size_t v = g->adj[u][k];
+                if (!visited[v] && residual[u][v] > 0)
+                {
+                    parent[v] = (int)u;
+                    if (v == sink)
+                    {
+                        found = true;
+                        break;
+                    }
+                    queue[back++] = v;
+                    visited[v] = true;
+                }
+            }
+            if (found)
+                break;
+        }
+        free(queue);
+        free(visited);
+        if (!found)
+            break;
+
+        // Encontra capacidade mínima no caminho aumentante
+        int path_flow = INT_MAX;
+        for (size_t v = sink; v != source; v = (size_t)parent[v])
+        {
+            size_t u = (size_t)parent[v];
+            if (residual[u][v] < path_flow)
+                path_flow = residual[u][v];
+        }
+        // Atualiza fluxo residual
+        for (size_t v = sink; v != source; v = (size_t)parent[v])
+        {
+            size_t u = (size_t)parent[v];
+            residual[u][v] -= path_flow;
+            residual[v][u] += path_flow;
+        }
+        if (max_flow > INT_MAX - path_flow)
+        { // Checagem de overflow
+            for (size_t i = 0; i < n; i++)
+                free(residual[i]);
+            free(residual);
+            free(parent);
+            return -1;
+        }
+        max_flow += path_flow;
+    }
+
+    for (size_t i = 0; i < n; i++)
+        free(residual[i]);
+    free(residual);
+    free(parent);
+    return max_flow;
+}
+
+/**
+ * @brief Calcula o corte mínimo (Min Cut) entre source e sink em um grafo direcionado.
+ *
+ * @param[in]  g           Ponteiro para o grafo (não pode ser NULL).
+ * @param[in]  capacity    Matriz de capacidades (n x n), onde capacity[u][v] >= 0.
+ * @param[in]  source      Vértice de origem (0 <= source < g->num_vertices).
+ * @param[in]  sink        Vértice de destino (0 <= sink < g->num_vertices).
+ * @param[out] out_cut     (Opcional) Array de arestas do corte mínimo (pares u,v).
+ * @param[out] out_ncut    (Opcional) Número de arestas no corte mínimo.
+ * @return Valor do corte mínimo, ou -1 em caso de erro.
+ *
+ * @note O usuário é responsável por liberar o array retornado em out_cut.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, INT30-C, ERR33-C
+ */
+int min_cut(const Graph *g, int **capacity, size_t source, size_t sink,
+            Edge **out_cut, size_t *out_ncut)
+{
+    if (out_cut)
+        *out_cut = NULL;
+    if (out_ncut)
+        *out_ncut = 0;
+    if (!g || !g->adj || !g->adj_size || !capacity)
+        return -1;
+    size_t n = g->num_vertices;
+    if (source >= n || sink >= n || source == sink)
+        return -1;
+
+    // 1. Executa Edmonds-Karp para obter grafo residual
+    int **residual = malloc(n * sizeof(int *));
+    if (!residual)
+        return -1;
+    for (size_t i = 0; i < n; i++)
+    {
+        residual[i] = malloc(n * sizeof(int));
+        if (!residual[i])
+        {
+            for (size_t j = 0; j < i; j++)
+                free(residual[j]);
+            free(residual);
+            return -1;
+        }
+        for (size_t j = 0; j < n; j++)
+            residual[i][j] = capacity[i][j];
+    }
+    int *parent = malloc(n * sizeof(int));
+    if (!parent)
+    {
+        for (size_t i = 0; i < n; i++)
+            free(residual[i]);
+        free(residual);
+        return -1;
+    }
+    int max_flow = 0;
+    while (1)
+    {
+        bool *visited = calloc(n, sizeof(bool));
+        if (!visited)
+            break;
+        for (size_t i = 0; i < n; i++)
+            parent[i] = -1;
+        size_t *queue = malloc(n * sizeof(size_t));
+        if (!queue)
+        {
+            free(visited);
+            break;
+        }
+        size_t front = 0, back = 0;
+        queue[back++] = source;
+        visited[source] = true;
+        bool found = false;
+        while (front < back)
+        {
+            size_t u = queue[front++];
+            for (size_t k = 0; k < g->adj_size[u]; k++)
+            {
+                size_t v = g->adj[u][k];
+                if (!visited[v] && residual[u][v] > 0)
+                {
+                    parent[v] = (int)u;
+                    if (v == sink)
+                    {
+                        found = true;
+                        break;
+                    }
+                    queue[back++] = v;
+                    visited[v] = true;
+                }
+            }
+            if (found)
+                break;
+        }
+        free(queue);
+        free(visited);
+        if (!found)
+            break;
+        int path_flow = INT_MAX;
+        for (size_t v = sink; v != source; v = (size_t)parent[v])
+        {
+            size_t u = (size_t)parent[v];
+            if (residual[u][v] < path_flow)
+                path_flow = residual[u][v];
+        }
+        for (size_t v = sink; v != source; v = (size_t)parent[v])
+        {
+            size_t u = (size_t)parent[v];
+            residual[u][v] -= path_flow;
+            residual[v][u] += path_flow;
+        }
+        if (max_flow > INT_MAX - path_flow)
+        {
+            for (size_t i = 0; i < n; i++)
+                free(residual[i]);
+            free(residual);
+            free(parent);
+            return -1;
+        }
+        max_flow += path_flow;
+    }
+    free(parent);
+
+    // 2. BFS no grafo residual para identificar lado acessível do corte
+    bool *reachable = calloc(n, sizeof(bool));
+    if (!reachable)
+    {
+        for (size_t i = 0; i < n; i++)
+            free(residual[i]);
+        free(residual);
+        return -1;
+    }
+    size_t *queue = malloc(n * sizeof(size_t));
+    if (!queue)
+    {
+        for (size_t i = 0; i < n; i++)
+            free(residual[i]);
+        free(residual);
+        free(reachable);
+        return -1;
+    }
+    size_t front = 0, back = 0;
+    queue[back++] = source;
+    reachable[source] = true;
+    while (front < back)
+    {
+        size_t u = queue[front++];
+        for (size_t k = 0; k < g->adj_size[u]; k++)
+        {
+            size_t v = g->adj[u][k];
+            if (!reachable[v] && residual[u][v] > 0)
+            {
+                reachable[v] = true;
+                queue[back++] = v;
+            }
+        }
+    }
+    free(queue);
+
+    // 3. Identifica arestas do corte mínimo
+    Edge *cut = malloc(n * n * sizeof(Edge)); // Limite superior
+    if (!cut)
+    {
+        for (size_t i = 0; i < n; i++)
+            free(residual[i]);
+        free(residual);
+        free(reachable);
+        return -1;
+    }
+    size_t ncut = 0;
+    for (size_t u = 0; u < n; u++)
+    {
+        if (!reachable[u])
+            continue;
+        for (size_t k = 0; k < g->adj_size[u]; k++)
+        {
+            size_t v = g->adj[u][k];
+            if (!reachable[v] && capacity[u][v] > 0)
+            {
+                cut[ncut].v1 = u;
+                cut[ncut].v2 = v;
+                ncut++;
+            }
+        }
+    }
+
+    if (out_cut)
+        *out_cut = cut;
+    else
+        free(cut);
+    if (out_ncut)
+        *out_ncut = ncut;
+
+    for (size_t i = 0; i < n; i++)
+        free(residual[i]);
+    free(residual);
+    free(reachable);
+
+    return max_flow;
+}
+
 /******************** FUNÇÃO PRINCIPAL (EXEMPLO) ********************/
 
 /**
