@@ -28,9 +28,19 @@ typedef struct
  */
 typedef struct
 {
-    int v1;
-    int v2;
+    size_t v1;
+    size_t v2;
 } Edge;
+
+/**
+ * @brief Estrutura auxiliar para armazenar matrizes de distâncias e predecessores.
+ */
+typedef struct
+{
+    int **dist;    // dist[i][j]: menor distância de i para j
+    size_t **pred; // pred[i][j]: predecessor de j no menor caminho de i para j
+    size_t n;      // número de vértices
+} FloydPathData;
 
 /******************** FUNÇÕES AUXILIARES DE MEMÓRIA ********************/
 
@@ -1259,6 +1269,395 @@ int dijkstra_shortest_path(const Graph *g, size_t source, size_t target, int **o
     int result = dist[target];
     free(dist);
     free(visited);
+    free(prev);
+    return result;
+}
+
+/**
+ * @brief Executa o Algoritmo Guloso Sequencial para coloração de grafos.
+ *
+ * @param[in]  g           Ponteiro para o grafo (não pode ser NULL).
+ * @param[out] out_ncolors (Opcional) Recebe o número total de cores usadas.
+ * @return Ponteiro para array dinâmico de inteiros, onde color[v] é a cor do vértice v.
+ *         O usuário é responsável por liberar o array retornado.
+ *         Em caso de erro, retorna NULL.
+ *
+ * @note As cores são inteiros consecutivos a partir de 0.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, DCL13-C
+ * @code
+ * size_t ncolors = 0;
+ * int *color = greedy_sequential_coloring(g, &ncolors);
+ * if (color) {
+ *     for (size_t v = 0; v < g->num_vertices; v++)
+ *         printf("v%zu: %d  ", v, color[v]);
+ *     printf("\nTotal de cores usadas: %zu\n", ncolors);
+ *     free(color);
+ * }
+ * @endcode
+ */
+int *greedy_sequential_coloring(const Graph *g, size_t *out_ncolors)
+{
+    if (!g || !g->adj || !g->adj_size)
+    {
+        fprintf(stderr, "[ERRO] greedy_sequential_coloring: Grafo ou membros internos são NULL.\n");
+        if (out_ncolors)
+            *out_ncolors = 0;
+        return NULL;
+    }
+    if (g->num_vertices == 0 || g->num_vertices > SIZE_MAX / sizeof(int))
+    {
+        fprintf(stderr, "[ERRO] greedy_sequential_coloring: Número de vértices inválido ou overflow.\n");
+        if (out_ncolors)
+            *out_ncolors = 0;
+        return NULL;
+    }
+
+    size_t n = g->num_vertices;
+    int *color = (int *)malloc(n * sizeof(int));
+    bool *used = (bool *)malloc(n * sizeof(bool));
+    if (!color || !used)
+    {
+        fprintf(stderr, "[ERRO] greedy_sequential_coloring: Falha ao alocar memória.\n");
+        free(color);
+        free(used);
+        if (out_ncolors)
+            *out_ncolors = 0;
+        return NULL;
+    }
+
+    for (size_t v = 0; v < n; v++)
+        color[v] = -1;
+
+    int max_color = -1;
+    for (size_t v = 0; v < n; v++)
+    {
+        for (size_t i = 0; i < n; i++)
+            used[i] = false;
+        for (size_t i = 0; i < g->adj_size[v]; i++)
+        {
+            size_t w = g->adj[v][i];
+            if (w < n && color[w] >= 0)
+                used[color[w]] = true;
+        }
+        int c;
+        for (c = 0; c < (int)n; c++)
+        {
+            if (!used[c])
+                break;
+        }
+        color[v] = c;
+        if (c > max_color)
+            max_color = c;
+    }
+
+    free(used);
+    if (out_ncolors)
+        *out_ncolors = (size_t)(max_color + 1);
+    return color;
+}
+
+/**
+ * @brief Libera a estrutura FloydPathData.
+ */
+static void free_floyd_path_data(FloydPathData *data)
+{
+    if (!data)
+        return;
+    if (data->dist)
+    {
+        for (size_t i = 0; i < data->n; i++)
+            free(data->dist[i]);
+        free(data->dist);
+    }
+    if (data->pred)
+    {
+        for (size_t i = 0; i < data->n; i++)
+            free(data->pred[i]);
+        free(data->pred);
+    }
+    free(data);
+}
+
+/**
+ * @brief Executa Floyd-Warshall e preenche matrizes de distâncias e predecessores.
+ * @return Ponteiro para FloydPathData, ou NULL em caso de erro.
+ */
+static FloydPathData *_floyd_warshall_all_pairs(const Graph *g)
+{
+    if (!g || !g->adj || !g->adj_size)
+        return NULL;
+    size_t n = g->num_vertices;
+    if (n == 0 || n > SIZE_MAX / sizeof(int *))
+        return NULL;
+
+    FloydPathData *data = malloc(sizeof(FloydPathData));
+    if (!data)
+        return NULL;
+    data->n = n;
+    data->dist = malloc(n * sizeof(int *));
+    data->pred = malloc(n * sizeof(size_t *));
+    if (!data->dist || !data->pred)
+    {
+        free_floyd_path_data(data);
+        return NULL;
+    }
+
+    for (size_t i = 0; i < n; i++)
+    {
+        data->dist[i] = malloc(n * sizeof(int));
+        data->pred[i] = malloc(n * sizeof(size_t));
+        if (!data->dist[i] || !data->pred[i])
+        {
+            free_floyd_path_data(data);
+            return NULL;
+        }
+        for (size_t j = 0; j < n; j++)
+        {
+            data->dist[i][j] = (i == j) ? 0 : INT_MAX;
+            data->pred[i][j] = SIZE_MAX; // sentinela: sem predecessor
+        }
+        for (size_t k = 0; k < g->adj_size[i]; k++)
+        {
+            size_t v = g->adj[i][k];
+            if (v < n)
+            {
+                data->dist[i][v] = 1; // peso unitário
+                data->pred[i][v] = i;
+            }
+        }
+    }
+
+    // Floyd-Warshall principal
+    for (size_t k = 0; k < n; k++)
+    {
+        for (size_t i = 0; i < n; i++)
+        {
+            if (data->dist[i][k] == INT_MAX)
+                continue;
+            for (size_t j = 0; j < n; j++)
+            {
+                if (data->dist[k][j] == INT_MAX)
+                    continue;
+                if (data->dist[i][k] > INT_MAX - data->dist[k][j])
+                    continue; // previne overflow
+                int alt = data->dist[i][k] + data->dist[k][j];
+                if (alt < data->dist[i][j])
+                {
+                    data->dist[i][j] = alt;
+                    data->pred[i][j] = data->pred[k][j];
+                }
+            }
+        }
+    }
+    return data;
+}
+
+/**
+ * @brief Reconstrói o caminho mínimo de source para target usando a matriz de predecessores.
+ * @param data Estrutura FloydPathData
+ * @param source Vértice de origem
+ * @param target Vértice de destino
+ * @param out_path (opcional) Recebe array dinâmico com o caminho (source...target)
+ * @param out_len (opcional) Recebe o número de vértices do caminho
+ * @return true se caminho existe, false caso contrário
+ */
+static bool _reconstruct_floyd_path(const FloydPathData *data, size_t source, size_t target, int **out_path, size_t *out_len)
+{
+    if (out_path)
+        *out_path = NULL;
+    if (out_len)
+        *out_len = 0;
+    if (!data || source >= data->n || target >= data->n)
+        return false;
+    if (data->dist[source][target] == INT_MAX)
+        return false;
+
+    // Caminho máximo: n vértices
+    int *tmp = malloc(data->n * sizeof(int));
+    if (!tmp)
+        return false;
+    size_t idx = 0;
+    size_t v = target;
+    while (v != source)
+    {
+        if (idx >= data->n || data->pred[source][v] == SIZE_MAX)
+        {
+            free(tmp);
+            return false;
+        }
+        tmp[idx++] = (int)v;
+        v = data->pred[source][v];
+    }
+    tmp[idx++] = (int)source;
+
+    // Inverte o caminho
+    if (out_path)
+    {
+        int *path = malloc(idx * sizeof(int));
+        if (!path)
+        {
+            free(tmp);
+            return false;
+        }
+        for (size_t i = 0; i < idx; i++)
+            path[i] = tmp[idx - 1 - i];
+        *out_path = path;
+    }
+    if (out_len)
+        *out_len = idx;
+    free(tmp);
+    return true;
+}
+
+/**
+ * @brief Consulta o menor caminho entre source e target usando Floyd-Warshall.
+ *        Interface idêntica à do dijkstra_shortest_path.
+ *
+ * @param[in]  g        Ponteiro para o grafo (não pode ser NULL).
+ * @param[in]  source   Vértice de origem (0 <= source < g->num_vertices).
+ * @param[in]  target   Vértice de destino (0 <= target < g->num_vertices).
+ * @param[out] out_path (Opcional) Recebe array dinâmico com o caminho (source...target).
+ * @param[out] out_len  (Opcional) Recebe o número de vértices do caminho.
+ * @return Distância mínima entre source e target, ou INT_MAX se não há caminho.
+ *
+ * @note O usuário é responsável por liberar o array retornado em out_path.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, DCL13-C, INT30-C
+ */
+int floyd_warshall_shortest_path(const Graph *g, size_t source, size_t target, int **out_path, size_t *out_len)
+{
+    if (out_path)
+        *out_path = NULL;
+    if (out_len)
+        *out_len = 0;
+    if (!g || !g->adj || !g->adj_size)
+        return INT_MAX;
+    if (source >= g->num_vertices || target >= g->num_vertices)
+        return INT_MAX;
+    if (g->num_vertices == 0)
+        return INT_MAX;
+
+    FloydPathData *data = _floyd_warshall_all_pairs(g);
+    if (!data)
+        return INT_MAX;
+
+    int dist = data->dist[source][target];
+    if (dist != INT_MAX && out_path)
+    {
+        if (!_reconstruct_floyd_path(data, source, target, out_path, out_len))
+        {
+            if (out_path)
+                *out_path = NULL;
+            if (out_len)
+                *out_len = 0;
+        }
+    }
+    free_floyd_path_data(data);
+    return dist;
+}
+
+/**
+ * @brief Calcula o menor caminho entre dois vértices usando Bellman-Ford (pesos unitários).
+ *
+ * @param[in]  g        Ponteiro para o grafo (não pode ser NULL).
+ * @param[in]  source   Vértice de origem (0 <= source < g->num_vertices).
+ * @param[in]  target   Vértice de destino (0 <= target < g->num_vertices).
+ * @param[out] out_path (Opcional) Recebe array dinâmico com o caminho (source...target).
+ * @param[out] out_len  (Opcional) Recebe o número de vértices do caminho.
+ * @return Distância mínima entre source e target, ou INT_MAX se não há caminho.
+ *
+ * @note O usuário é responsável por liberar o array retornado em out_path.
+ * @note Para grafos ponderados, adapte a estrutura do grafo para armazenar pesos.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, DCL13-C, INT30-C
+ */
+int bellman_ford_shortest_path(const Graph *g, size_t source, size_t target, int **out_path, size_t *out_len)
+{
+    if (out_path)
+        *out_path = NULL;
+    if (out_len)
+        *out_len = 0;
+    if (!g || !g->adj || !g->adj_size)
+        return INT_MAX;
+    if (source >= g->num_vertices || target >= g->num_vertices)
+        return INT_MAX;
+    if (g->num_vertices == 0)
+        return INT_MAX;
+
+    size_t n = g->num_vertices;
+    int *dist = (int *)malloc(n * sizeof(int));
+    size_t *prev = (size_t *)malloc(n * sizeof(size_t));
+    if (!dist || !prev)
+    {
+        free(dist);
+        free(prev);
+        return INT_MAX;
+    }
+
+    for (size_t i = 0; i < n; i++)
+    {
+        dist[i] = INT_MAX;
+        prev[i] = SIZE_MAX;
+    }
+    dist[source] = 0;
+
+    // Relaxa todas as arestas (n-1) vezes
+    for (size_t iter = 0; iter < n - 1; iter++)
+    {
+        bool updated = false;
+        for (size_t u = 0; u < n; u++)
+        {
+            if (dist[u] == INT_MAX)
+                continue;
+            for (size_t k = 0; k < g->adj_size[u]; k++)
+            {
+                size_t v = g->adj[u][k];
+                if (v >= n)
+                    continue;
+                if (dist[u] + 1 < dist[v])
+                {
+                    dist[v] = dist[u] + 1;
+                    prev[v] = u;
+                    updated = true;
+                }
+            }
+        }
+        if (!updated)
+            break;
+    }
+
+    // (Opcional) Verifica ciclos negativos (não deve ocorrer com pesos unitários)
+    // Se desejar, adicione um parâmetro bool *has_negative_cycle
+
+    // Reconstrói o caminho, se solicitado e se existe
+    if (out_path && dist[target] != INT_MAX)
+    {
+        size_t path_len = 1;
+        for (size_t v = target; v != source; v = prev[v])
+            path_len++;
+        int *path = (int *)malloc(path_len * sizeof(int));
+        if (path)
+        {
+            size_t idx = path_len;
+            size_t v = target;
+            while (1)
+            {
+                path[--idx] = (int)v;
+                if (v == source)
+                    break;
+                v = prev[v];
+            }
+            *out_path = path;
+            if (out_len)
+                *out_len = path_len;
+        }
+        else
+        {
+            if (out_len)
+                *out_len = 0;
+        }
+    }
+
+    int result = dist[target];
+    free(dist);
     free(prev);
     return result;
 }
