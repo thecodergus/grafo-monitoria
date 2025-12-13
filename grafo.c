@@ -42,6 +42,24 @@ typedef struct
     size_t n;      // número de vértices
 } FloydPathData;
 
+/**
+ * @brief Estrutura para aresta com peso.
+ */
+typedef struct
+{
+    size_t v1, v2;
+    int weight;
+} WeightedEdge;
+
+/**
+ * @brief Estrutura Union-Find (Disjoint Set) para detecção de ciclos.
+ */
+typedef struct
+{
+    size_t *parent;
+    int *rank;
+    size_t n;
+} DisjointSet;
 /******************** FUNÇÕES AUXILIARES DE MEMÓRIA ********************/
 
 /**
@@ -1660,6 +1678,158 @@ int bellman_ford_shortest_path(const Graph *g, size_t source, size_t target, int
     free(dist);
     free(prev);
     return result;
+}
+
+static DisjointSet *ds_create(size_t n)
+{
+    DisjointSet *ds = malloc(sizeof(DisjointSet));
+    if (!ds)
+        return NULL;
+    ds->parent = malloc(n * sizeof(size_t));
+    ds->rank = malloc(n * sizeof(int));
+    if (!ds->parent || !ds->rank)
+    {
+        free(ds->parent);
+        free(ds->rank);
+        free(ds);
+        return NULL;
+    }
+    ds->n = n;
+    for (size_t i = 0; i < n; i++)
+    {
+        ds->parent[i] = i;
+        ds->rank[i] = 0;
+    }
+    return ds;
+}
+static void ds_free(DisjointSet *ds)
+{
+    if (!ds)
+        return;
+    free(ds->parent);
+    free(ds->rank);
+    free(ds);
+}
+static size_t ds_find(DisjointSet *ds, size_t x)
+{
+    if (ds->parent[x] != x)
+        ds->parent[x] = ds_find(ds, ds->parent[x]);
+    return ds->parent[x];
+}
+static void ds_union(DisjointSet *ds, size_t x, size_t y)
+{
+    size_t rx = ds_find(ds, x), ry = ds_find(ds, y);
+    if (rx == ry)
+        return;
+    if (ds->rank[rx] < ds->rank[ry])
+        ds->parent[rx] = ry;
+    else if (ds->rank[rx] > ds->rank[ry])
+        ds->parent[ry] = rx;
+    else
+    {
+        ds->parent[ry] = rx;
+        ds->rank[rx]++;
+    }
+}
+
+/* Função de comparação para qsort */
+static int edge_cmp(const void *a, const void *b)
+{
+    const WeightedEdge *ea = (const WeightedEdge *)a;
+    const WeightedEdge *eb = (const WeightedEdge *)b;
+    return (ea->weight > eb->weight) - (ea->weight < eb->weight);
+}
+
+/**
+ * @brief Executa o algoritmo de Kruskal para encontrar a Árvore Geradora Mínima (MST).
+ *
+ * @param[in]  g           Ponteiro para o grafo (não pode ser NULL).
+ * @param[out] out_edges   (Opcional) Recebe array dinâmico de arestas da MST.
+ * @param[out] out_nedges  (Opcional) Recebe o número de arestas da MST.
+ * @return Soma dos pesos da MST, ou -1 em caso de erro ou grafo desconexo.
+ *
+ * @note O usuário é responsável por liberar o array retornado em out_edges.
+ * @note Regras CERT C: API00-C, ARR30-C, MEM35-C, ERR33-C, DCL13-C, INT30-C
+ */
+int kruskal_mst(const Graph *g, WeightedEdge **out_edges, size_t *out_nedges)
+{
+    if (out_edges)
+        *out_edges = NULL;
+    if (out_nedges)
+        *out_nedges = 0;
+    if (!g || !g->adj || !g->adj_size || g->num_vertices == 0)
+        return -1;
+
+    size_t n = g->num_vertices;
+    /* 1. Extrair todas as arestas (evitando duplicatas em grafos não direcionados) */
+    size_t max_edges = 0;
+    for (size_t u = 0; u < n; u++)
+        max_edges += g->adj_size[u];
+    WeightedEdge *edges = malloc(max_edges * sizeof(WeightedEdge));
+    if (!edges)
+        return -1;
+    size_t nedges = 0;
+    for (size_t u = 0; u < n; u++)
+    {
+        for (size_t k = 0; k < g->adj_size[u]; k++)
+        {
+            size_t v = g->adj[u][k];
+            if (!g->directed && u > v)
+                continue; // Evita duplicatas
+            edges[nedges].v1 = u;
+            edges[nedges].v2 = v;
+            edges[nedges].weight = 1; // Peso unitário; adapte se houver pesos
+            nedges++;
+        }
+    }
+
+    /* 2. Ordenar as arestas por peso */
+    qsort(edges, nedges, sizeof(WeightedEdge), edge_cmp);
+
+    /* 3. Inicializar Union-Find */
+    DisjointSet *ds = ds_create(n);
+    if (!ds)
+    {
+        free(edges);
+        return -1;
+    }
+
+    /* 4. Percorrer as arestas ordenadas */
+    WeightedEdge *mst = malloc((n - 1) * sizeof(WeightedEdge));
+    if (!mst)
+    {
+        free(edges);
+        ds_free(ds);
+        return -1;
+    }
+    size_t mst_n = 0;
+    int total_weight = 0;
+    for (size_t i = 0; i < nedges && mst_n < n - 1; i++)
+    {
+        size_t u = edges[i].v1, v = edges[i].v2;
+        if (ds_find(ds, u) != ds_find(ds, v))
+        {
+            ds_union(ds, u, v);
+            mst[mst_n++] = edges[i];
+            total_weight += edges[i].weight;
+        }
+    }
+
+    free(edges);
+    ds_free(ds);
+
+    if (mst_n != n - 1)
+    { // Grafo desconexo
+        free(mst);
+        return -1;
+    }
+    if (out_edges)
+        *out_edges = mst;
+    else
+        free(mst);
+    if (out_nedges)
+        *out_nedges = mst_n;
+    return total_weight;
 }
 
 /******************** FUNÇÃO PRINCIPAL (EXEMPLO) ********************/
