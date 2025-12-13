@@ -2914,6 +2914,108 @@ int find_biconnected_components(
     return 0;
 }
 
+/**
+ * @brief Testa se um grafo é bipartido e, se for, retorna a coloração 2-partida.
+ *
+ * @param[in]  g           Ponteiro para o grafo (não pode ser NULL).
+ * @param[out] out_colors  (Opcional) Array de cores (0 ou 1) para cada vértice (size_t*). O usuário deve liberar.
+ * @return true se o grafo é bipartido, false caso contrário ou em caso de erro.
+ *
+ * @note O usuário é responsável por liberar o array retornado em out_colors.
+ * @note Funciona para grafos direcionados e não-direcionados, mas a bipartição clássica só faz sentido para não-direcionados.
+ * @note Regras CERT: API00-C, ARR30-C, MEM35-C, ERR33-C, INT30-C
+ * @example
+ * size_t *colors = NULL;
+ * if (is_bipartite(g, &colors)) {
+ *     printf("Grafo bipartido. Cores: ");
+ *     for (size_t i = 0; i < g->num_vertices; i++)
+ *         printf("%zu ", colors[i]);
+ *     printf("\n");
+ *     free(colors);
+ * } else {
+ *     printf("Grafo NÃO é bipartido.\n");
+ * }
+ */
+bool is_bipartite(const Graph *g, size_t **out_colors)
+{
+    if (out_colors)
+        *out_colors = NULL;
+    if (!g || !g->adj || !g->adj_size)
+        return false;
+
+    size_t n = g->num_vertices;
+    if (n == 0)
+        return true;
+
+    int *color = (int *)malloc(n * sizeof(int));
+    bool *visited = (bool *)calloc(n, sizeof(bool));
+    size_t *queue = (size_t *)malloc(n * sizeof(size_t));
+    if (!color || !visited || !queue)
+    {
+        free(color);
+        free(visited);
+        free(queue);
+        return false;
+    }
+
+    for (size_t i = 0; i < n; i++)
+    {
+        color[i] = -1;
+        visited[i] = false;
+    }
+
+    bool bipartite = true;
+    for (size_t start = 0; start < n && bipartite; start++)
+    {
+        if (!visited[start])
+        {
+            size_t front = 0, back = 0;
+            queue[back++] = start;
+            color[start] = 0;
+            visited[start] = true;
+
+            while (front < back && bipartite)
+            {
+                size_t u = queue[front++];
+                for (size_t k = 0; k < g->adj_size[u]; k++)
+                {
+                    size_t v = g->adj[u][k];
+                    if (!visited[v])
+                    {
+                        color[v] = 1 - color[u];
+                        visited[v] = true;
+                        queue[back++] = v;
+                    }
+                    else if (color[v] == color[u])
+                    {
+                        bipartite = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if (bipartite && out_colors)
+    {
+        *out_colors = (size_t *)malloc(n * sizeof(size_t));
+        if (!*out_colors)
+        {
+            bipartite = false;
+        }
+        else
+        {
+            for (size_t i = 0; i < n; i++)
+                (*out_colors)[i] = (size_t)color[i];
+        }
+    }
+
+    free(color);
+    free(visited);
+    free(queue);
+    return bipartite;
+}
+
 /******************** FUNÇÃO PRINCIPAL (EXEMPLO) ********************/
 
 /**
