@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <limits.h>
-
+#include <stdint.h>
 #define GRAFO_MAX_VERTICES 10000
 
 /*
