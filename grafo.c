@@ -2472,6 +2472,90 @@ int min_cut(const Graph *g, int **capacity, size_t source, size_t sink,
     return max_flow;
 }
 
+/**
+ * @brief Executa a ordenação topológica em um grafo direcionado acíclico (DAG).
+ *
+ * @param[in] g Ponteiro para o grafo (deve ser direcionado).
+ * @return Vetor dinâmico com a ordenação topológica dos vértices (0..n-1), ou NULL em caso de erro ou se o grafo não for um DAG.
+ * @note O usuário é responsável por liberar o vetor retornado.
+ * @note Retorna NULL se o grafo contém ciclos ou se ocorrer erro de alocação.
+ * @note Regras CERT: API00-C, ARR30-C, MEM35-C, ERR33-C, INT30-C
+ * @example
+ * size_t *ordem = topological_sort(g);
+ * if (ordem) {
+ *     for (size_t i = 0; i < g->num_vertices; i++)
+ *         printf("%zu ", ordem[i]);
+ *     free(ordem);
+ * } else {
+ *     printf("Grafo não é um DAG ou ocorreu erro.\n");
+ * }
+ */
+size_t *topological_sort(const Graph *g)
+{
+    if (!g || !g->adj || !g->adj_size || !g->directed)
+        return NULL;
+    size_t n = g->num_vertices;
+    if (n == 0)
+        return NULL;
+
+    size_t *in_degree = (size_t *)calloc(n, sizeof(size_t));
+    size_t *order = (size_t *)malloc(n * sizeof(size_t));
+    size_t *queue = (size_t *)malloc(n * sizeof(size_t));
+    if (!in_degree || !order || !queue)
+    {
+        free(in_degree);
+        free(order);
+        free(queue);
+        return NULL;
+    }
+
+    // Calcula grau de entrada
+    for (size_t u = 0; u < n; u++)
+    {
+        for (size_t k = 0; k < g->adj_size[u]; k++)
+        {
+            size_t v = g->adj[u][k];
+            if (v >= n)
+            { // Checagem de integridade
+                free(in_degree);
+                free(order);
+                free(queue);
+                return NULL;
+            }
+            in_degree[v]++;
+        }
+    }
+
+    // Inicializa fila com vértices de grau de entrada zero
+    size_t front = 0, back = 0;
+    for (size_t v = 0; v < n; v++)
+        if (in_degree[v] == 0)
+            queue[back++] = v;
+
+    size_t idx = 0;
+    while (front < back)
+    {
+        size_t u = queue[front++];
+        order[idx++] = u;
+        for (size_t k = 0; k < g->adj_size[u]; k++)
+        {
+            size_t v = g->adj[u][k];
+            if (--in_degree[v] == 0)
+                queue[back++] = v;
+        }
+    }
+
+    free(in_degree);
+    free(queue);
+
+    if (idx != n)
+    { // Grafo contém ciclo
+        free(order);
+        return NULL;
+    }
+    return order;
+}
+
 /******************** FUNÇÃO PRINCIPAL (EXEMPLO) ********************/
 
 /**
