@@ -60,6 +60,16 @@ typedef struct
     int *rank;
     size_t n;
 } DisjointSet;
+
+/**
+ * @brief Estrutura para armazenar uma componente biconexa.
+ */
+typedef struct
+{
+    size_t *vertices; ///< Array de vértices pertencentes à componente.
+    size_t size;      ///< Número de vértices na componente.
+} BiconnectedComponent;
+
 /******************** FUNÇÕES AUXILIARES DE MEMÓRIA ********************/
 
 /**
@@ -2731,6 +2741,176 @@ int detect_bridges_articulations(
     free(is_artic);
     free(bridges);
     free(artics);
+    return 0;
+}
+
+/**
+ * @brief Encontra todas as componentes biconexas de um grafo não direcionado.
+ *
+ * @param[in]  g                Ponteiro para o grafo (deve ser não direcionado).
+ * @param[out] out_components   (Opcional) Array dinâmico de componentes biconexas (BiconnectedComponent*). O usuário deve liberar.
+ * @param[out] out_ncomponents  (Opcional) Número de componentes biconexas encontradas.
+ * @return 0 em caso de sucesso, -1 em caso de erro (parâmetros inválidos ou falha de alocação).
+ *
+ * @note O usuário é responsável por liberar os arrays retornados.
+ * @note Regras CERT: API00-C, ARR30-C, MEM35-C, ERR33-C, INT30-C
+ * @example
+ * BiconnectedComponent *components = NULL;
+ * size_t ncomponents = 0;
+ * if (find_biconnected_components(g, &components, &ncomponents) == 0) {
+ *     for (size_t i = 0; i < ncomponents; i++) {
+ *         printf("Componente %zu: ", i);
+ *         for (size_t j = 0; j < components[i].size; j++)
+ *             printf("%zu ", components[i].vertices[j]);
+ *         printf("\n");
+ *         free(components[i].vertices);
+ *     }
+ *     free(components);
+ * }
+ */
+int find_biconnected_components(
+    const Graph *g,
+    BiconnectedComponent **out_components, size_t *out_ncomponents)
+{
+    if (out_components)
+        *out_components = NULL;
+    if (out_ncomponents)
+        *out_ncomponents = 0;
+    if (!g || !g->adj || !g->adj_size || g->directed)
+        return -1;
+
+    size_t n = g->num_vertices;
+    if (n == 0)
+        return 0;
+
+    int *dfs_num = (int *)malloc(n * sizeof(int));
+    int *dfs_low = (int *)malloc(n * sizeof(int));
+    int *parent = (int *)malloc(n * sizeof(int));
+    bool *visited = (bool *)calloc(n, sizeof(bool));
+    size_t *stack = (size_t *)malloc(n * n * sizeof(size_t)); // Pilha para armazenar arestas
+    size_t stack_top = 0;
+    BiconnectedComponent *components = NULL;
+    size_t ncomponents = 0;
+
+    if (!dfs_num || !dfs_low || !parent || !visited || !stack)
+    {
+        free(dfs_num);
+        free(dfs_low);
+        free(parent);
+        free(visited);
+        free(stack);
+        return -1;
+    }
+
+    int time = 0;
+
+    // Função recursiva interna
+    void dfs(size_t u)
+    {
+        visited[u] = true;
+        dfs_num[u] = dfs_low[u] = time++;
+        int children = 0;
+
+        for (size_t k = 0; k < g->adj_size[u]; k++)
+        {
+            size_t v = g->adj[u][k];
+            if (!visited[v])
+            {
+                parent[v] = (int)u;
+                children++;
+                stack[stack_top++] = u * n + v; // Empilha aresta (u, v)
+                dfs(v);
+
+                if (dfs_low[u] > dfs_low[v])
+                    dfs_low[u] = dfs_low[v];
+
+                // Verifica se (u, v) é uma ponte ou se u é ponto de articulação
+                if ((parent[u] == -1 && children > 1) || (parent[u] != -1 && dfs_low[v] >= dfs_num[u]))
+                {
+                    // Nova componente biconexa
+                    BiconnectedComponent component;
+                    component.vertices = (size_t *)malloc(n * sizeof(size_t));
+                    component.size = 0;
+                    if (!component.vertices)
+                    {
+                        free(dfs_num);
+                        free(dfs_low);
+                        free(parent);
+                        free(visited);
+                        free(stack);
+                        return;
+                    }
+
+                    size_t edge;
+                    do
+                    {
+                        edge = stack[--stack_top];
+                        size_t x = edge / n, y = edge % n;
+                        if (component.size == 0 || component.vertices[component.size - 1] != x)
+                            component.vertices[component.size++] = x;
+                        if (component.size == 0 || component.vertices[component.size - 1] != y)
+                            component.vertices[component.size++] = y;
+                    } while (edge != u * n + v);
+
+                    components = (BiconnectedComponent *)realloc(components, (ncomponents + 1) * sizeof(BiconnectedComponent));
+                    if (!components)
+                    {
+                        free(dfs_num);
+                        free(dfs_low);
+                        free(parent);
+                        free(visited);
+                        free(stack);
+                        free(component.vertices);
+                        return;
+                    }
+                    components[ncomponents++] = component;
+                }
+            }
+            else if ((size_t)parent[u] != v && dfs_num[v] < dfs_num[u])
+            {
+                stack[stack_top++] = u * n + v; // Empilha aresta de retorno
+                if (dfs_low[u] > dfs_num[v])
+                    dfs_low[u] = dfs_num[v];
+            }
+        }
+    }
+
+    // Inicialização
+    for (size_t i = 0; i < n; i++)
+    {
+        dfs_num[i] = -1;
+        dfs_low[i] = -1;
+        parent[i] = -1;
+        visited[i] = false;
+    }
+
+    for (size_t u = 0; u < n; u++)
+    {
+        if (!visited[u])
+        {
+            dfs(u);
+        }
+    }
+
+    // Ajusta arrays de saída
+    if (out_components && ncomponents > 0)
+    {
+        *out_components = components;
+    }
+    else
+    {
+        for (size_t i = 0; i < ncomponents; i++)
+            free(components[i].vertices);
+        free(components);
+    }
+    if (out_ncomponents)
+        *out_ncomponents = ncomponents;
+
+    free(dfs_num);
+    free(dfs_low);
+    free(parent);
+    free(visited);
+    free(stack);
     return 0;
 }
 
