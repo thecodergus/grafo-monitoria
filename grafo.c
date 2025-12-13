@@ -712,11 +712,6 @@ bool has_cycle(const Graph *g)
     return false;
 }
 
-typedef struct
-{
-    int v1, v2;
-} Edge;
-
 /**
  * @brief Retorna um array dinâmico com todas as arestas do grafo.
  * @param[in]  g         Ponteiro constante para o grafo.
@@ -922,7 +917,7 @@ void print_graph(const Graph *g)
     {
         for (size_t i = 0; i < num_edges; i++)
         {
-            printf("(%d, %d)%s", edges[i].v1, edges[i].v2, (i == num_edges - 1) ? "" : ", ");
+            printf("(%ld, %ld)%s", edges[i].v1, edges[i].v2, (i == num_edges - 1) ? "" : ", ");
         }
         free(edges);
     }
