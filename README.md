@@ -16,7 +16,6 @@
     - [**Exemplos de Uso (C)**](#exemplos-de-uso-c)
       - [Ordenação Topológica](#ordenação-topológica)
       - [Detecção de Pontes e Articulações](#detecção-de-pontes-e-articulações)
-      - [Emparelhamento Máximo em Bipartidos (Hopcroft-Karp)](#emparelhamento-máximo-em-bipartidos-hopcroft-karp)
   - [Funcionalidades](#funcionalidades)
   - [Tecnologias Utilizadas](#tecnologias-utilizadas)
   - [Contribuição](#contribuição)
@@ -130,16 +129,6 @@ size_t *artics = NULL; size_t nartics = 0;
 if (detect_bridges_articulations(g, &bridges, &nbridges, &artics, &nartics) == 0) {
     // Imprime pontes e articulações
     free(bridges); free(artics);
-}
-```
-
-#### Emparelhamento Máximo em Bipartidos (Hopcroft-Karp)
-```c
-size_t *matching = NULL;
-int max_matching = hopcroft_karp(g, part_u_size, &matching);
-if (max_matching >= 0) {
-    // Imprime pares emparelhados
-    free(matching);
 }
 ```
 
